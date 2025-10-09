@@ -1,5 +1,5 @@
 import Image from "next/image";
 
 export default function HomePage() {
-  return <h1>Welcome to My Photo Editor</h1>;
+  return <h1>Bilal Hello Champ</h1>;
 }
