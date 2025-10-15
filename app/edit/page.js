@@ -309,6 +309,8 @@ export default function EditPage() {
   const [textSize, setTextSize] = useState(50);
   const [isSaving, setIsSaving] = useState(false);
   const [isLibraryReady, setIsLibraryReady] = useState(false);
+  // 🏆 PRO FIX: New state to track if the main image element has fully loaded.
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
   const imageWrapperRef = useRef(null); // Ref for the element to capture
   const uploadInputRef = useRef(null);
 
@@ -333,15 +335,30 @@ export default function EditPage() {
     };
   }, []);
 
+  // Clean up the Blob URL when imageSrc changes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (imageSrc) {
+        // Revoke the Blob URL to free up memory
+        URL.revokeObjectURL(imageSrc);
+      }
+    };
+  }, [imageSrc]); // Dependency on imageSrc ensures cleanup of the *previous* URL when a new one is set
+
   // --- IMAGE & FILTER LOGIC ---
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setImageSrc(event.target.result);
-      };
-      reader.readAsDataURL(file);
+      // Clean up previous blob URL
+      if (imageSrc) {
+        URL.revokeObjectURL(imageSrc);
+      }
+      // 🏆 PRO FIX: Reset load status for new image
+      setIsImageLoaded(false);
+
+      // Use URL.createObjectURL (a Blob URL) for local files to prevent canvas tainting.
+      const newImageSrc = URL.createObjectURL(file);
+      setImageSrc(newImageSrc);
     }
   };
 
@@ -392,74 +409,64 @@ export default function EditPage() {
   };
 
   const handleSaveImage = async () => {
-    if (!imageWrapperRef.current || !isLibraryReady) {
-      alert("Editor is not ready yet, please wait a moment.");
+    if (!imageWrapperRef.current || !isLibraryReady || !isImageLoaded) {
+      alert("Please wait — the image and editor must finish loading.");
       return;
     }
 
     setIsSaving(true);
 
     try {
-      const isIOS =
-        /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      const canvasScale = isIOS ? 1 : 2; // Use lower scale on iOS to prevent memory issues
-
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       const canvas = await html2canvas(imageWrapperRef.current, {
         useCORS: true,
-        scale: canvasScale,
-        backgroundColor: "#111", // Important for proper rendering
-        // Remove allowTaint as it prevents canvas data extraction
+        scale: isMobile ? 1 : 2,
+        backgroundColor: "#111",
       });
 
-      const triggerDownload = (imageUrl) => {
+      const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.95)
+      );
+      if (!blob) throw new Error("Image blob creation failed.");
+
+      const file = new File([blob], "edited-image.jpg", { type: "image/jpeg" });
+      const imageUrl = URL.createObjectURL(blob);
+
+      if (isMobile) {
+        // --- 📱 Mobile handling ---
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: "Edited Image",
+              text: "Check out this image I created!",
+            });
+            // shared successfully
+          } catch (err) {
+            console.warn("Share failed:", err);
+            // fallback to open image (for manual save)
+            window.open(imageUrl, "_blank");
+          }
+        } else {
+          // Fallback: open image in a new tab so user can long-press or "Save Image"
+          window.open(imageUrl, "_blank");
+        }
+      } else {
+        // --- 💻 Desktop handling ---
         const link = document.createElement("a");
         link.href = imageUrl;
         link.download = "edited-image.jpg";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-      };
+      }
 
-      canvas.toBlob(
-        async (blob) => {
-          if (!blob) {
-            setIsSaving(false);
-            alert("Failed to create image file.");
-            return;
-          }
-
-          const file = new File([blob], "edited-image.jpg", {
-            type: "image/jpeg",
-          });
-          const imageUrl = URL.createObjectURL(blob);
-
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({
-                files: [file],
-                title: "Edited Image",
-                text: "Check out this image I created!",
-              });
-            } catch (error) {
-              // This can happen if the user cancels the share. Fallback to download.
-              if (error.name !== "AbortError") {
-                console.log("Share failed, falling back to download.", error);
-                triggerDownload(imageUrl);
-              }
-            }
-          } else {
-            triggerDownload(imageUrl);
-          }
-
-          URL.revokeObjectURL(imageUrl);
-          setIsSaving(false);
-        },
-        "image/jpeg",
-        0.9
-      ); // Use JPEG with 90% quality for smaller file size
+      // Cleanup
+      setTimeout(() => URL.revokeObjectURL(imageUrl), 5000);
     } catch (error) {
-      console.error("Failed to capture image:", error);
-      alert("Sorry, something went wrong while saving the image.");
+      console.error("Error saving image:", error);
+      alert("Failed to save image. Please check the console for details.");
+    } finally {
       setIsSaving(false);
     }
   };
@@ -474,13 +481,16 @@ export default function EditPage() {
           {/* --- IMAGE PREVIEW --- */}
           <div className="previewContainer">
             {imageSrc ? (
+              // Ref is crucial here for html2canvas to capture the entire state
               <div className="imageWrapper" ref={imageWrapperRef}>
                 <img
                   src={imageSrc}
                   crossOrigin="anonymous" /* Crucial for canvas capturing */
                   alt="Image preview"
                   className="imagePreview"
-                  style={{ filter: getCssFilterString() }}
+                  style={{ filter: getCssFilterString() }} // Filter applied via style attribute
+                  // 🏆 PRO FIX: Set state when image is fully loaded
+                  onLoad={() => setIsImageLoaded(true)}
                 />
                 {activeEffects.vignette && (
                   <div className="vignetteOverlay"></div>
@@ -660,12 +670,16 @@ export default function EditPage() {
                 <button
                   onClick={handleSaveImage}
                   className="saveButton"
-                  disabled={isSaving || !isLibraryReady}
+                  // 🏆 PRO FIX: Only enable save when library AND image are loaded
+                  disabled={isSaving || !isLibraryReady || !isImageLoaded}
                 >
                   {isSaving
                     ? "Saving..."
                     : !isLibraryReady
                     ? "Editor Loading..."
+                    : // 🏆 PRO FIX: Provide clearer feedback to the user
+                    !isImageLoaded
+                    ? "Image Loading..."
                     : "Save or Share Image"}
                 </button>
               </>
