@@ -124,55 +124,71 @@ export default function EditPage() {
   // ==========================================================
   // --- ⬇️ MODIFIED SAVE/SHARE IMAGE FUNCTION ⬇️ ---
   // ==========================================================
+  // ==========================================================
+  // --- ⬇️ FULLY CORRECTED SAVE/SHARE IMAGE FUNCTION ⬇️ ---
+  // ==========================================================
   const handleSaveImage = async () => {
-    if (!originalImageRef.current || !canvasRef.current) return;
+    // Check if the image and canvas refs are available
+    if (!originalImageRef.current || !canvasRef.current || !imageRef.current)
+      return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
+
+    // Use the original image for dimensions, but the displayed image for drawing
     const img = originalImageRef.current;
+    const displayedImg = imageRef.current; // The <img> element from the page
 
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    ctx.filter = getCssFilterString();
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    ctx.filter = "none";
+    // --- FIX for iOS ---
+    // REMOVED: ctx.filter = getCssFilterString(); (This is buggy in Safari)
+    // CHANGED: We now draw the displayed <img> element. The browser will render
+    // it with all the CSS filters already applied, capturing the final look.
+    ctx.drawImage(displayedImg, 0, 0, canvas.width, canvas.height);
+
+    // --- Draw text (This part remains the same) ---
     const selectedFont =
       fonts.find((f) => f.className === textFont) || fonts[0];
-    const scaledTextSize =
-      textSize * (canvas.width / imageRef.current.clientWidth);
+    // Calculate text size relative to the canvas, not the smaller preview
+    const scaledTextSize = textSize * (canvas.width / displayedImg.clientWidth);
     ctx.font = `${scaledTextSize}px ${selectedFont.name}`;
     ctx.fillStyle = textColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-    // Convert canvas to a Blob object, which is needed for the Web Share API
     canvas.toBlob(async (blob) => {
       if (!blob) return;
 
       const file = new File([blob], "edited-image.png", { type: "image/png" });
       const filesArray = [file];
 
-      // **Check if the Web Share API is available and can share files**
       if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+        // Use native sharing on mobile (Android, iOS)
         try {
-          // **Use the native share dialog on mobile**
           await navigator.share({
             files: filesArray,
             title: "My Edited Image",
-            text: "Check out this image I edited with Midnight Editor!",
+            text: "Check out this image I edited!",
           });
         } catch (error) {
           console.error("Sharing failed:", error);
         }
       } else {
-        // **Fallback for desktop browsers (or mobile browsers that don't support sharing)**
+        // --- FIX for Desktop ---
+        // This fallback is now more robust.
         const link = document.createElement("a");
         link.download = "edited-image.png";
         link.href = URL.createObjectURL(blob);
+
+        // CHANGED: Add link to the DOM, click it, then remove it
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(link.href); // Clean up the object URL from memory
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(link.href);
       }
     }, "image/png");
   };

@@ -5,7 +5,7 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <div className={styles.container}>
-      <h2>Welcome to Midnight Photo Editor</h2>
+      <h2>Welcome bilal to Midnight Photo Editor</h2>
       <p>Edit your pictures like a pro — apply filters, effects, and more!</p>
 
       <div className={styles.links}>
