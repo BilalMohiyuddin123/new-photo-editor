@@ -90,6 +90,7 @@ const Styles = () => (
       display: flex;
       flex-grow: 1;
       width: 100%;
+      overflow: hidden; /* Prevent layout shifts from scrollbars */
     }
     .previewContainer {
       flex-grow: 1;
@@ -307,18 +308,28 @@ export default function EditPage() {
   const [textFont, setTextFont] = useState(fonts[0].className);
   const [textSize, setTextSize] = useState(50);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLibraryReady, setIsLibraryReady] = useState(false);
   const imageWrapperRef = useRef(null); // Ref for the element to capture
   const uploadInputRef = useRef(null);
 
-  // Dynamically load the html2canvas library
+  // Dynamically load the html2canvas library and manage its ready state
   useEffect(() => {
+    if (window.html2canvas) {
+      setIsLibraryReady(true);
+      return;
+    }
     const script = document.createElement("script");
     script.src =
       "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-    script.async = true;
+    script.onload = () => setIsLibraryReady(true);
+    script.onerror = () => console.error("Failed to load html2canvas library.");
     document.body.appendChild(script);
+
     return () => {
-      document.body.removeChild(script);
+      // Check if the script is still in the body before trying to remove it
+      if (script.parentNode) {
+        document.body.removeChild(script);
+      }
     };
   }, []);
 
@@ -381,19 +392,23 @@ export default function EditPage() {
   };
 
   const handleSaveImage = async () => {
-    if (!imageWrapperRef.current || typeof html2canvas === "undefined") {
-      alert("Component is not ready yet, please wait a moment.");
+    if (!imageWrapperRef.current || !isLibraryReady) {
+      alert("Editor is not ready yet, please wait a moment.");
       return;
     }
 
     setIsSaving(true);
 
     try {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const canvasScale = isIOS ? 1 : 2; // Use lower scale on iOS to prevent memory issues
+
       const canvas = await html2canvas(imageWrapperRef.current, {
         useCORS: true,
-        allowTaint: true,
-        // Capture at 2x resolution to improve quality vs screen resolution
-        scale: 2,
+        scale: canvasScale,
+        backgroundColor: "#111", // Important for proper rendering
+        // Remove allowTaint as it prevents canvas data extraction
       });
 
       const triggerDownload = (imageUrl) => {
@@ -409,6 +424,7 @@ export default function EditPage() {
         async (blob) => {
           if (!blob) {
             setIsSaving(false);
+            alert("Failed to create image file.");
             return;
           }
 
@@ -425,8 +441,11 @@ export default function EditPage() {
                 text: "Check out this image I created!",
               });
             } catch (error) {
-              console.log("Share failed, falling back to download.", error);
-              triggerDownload(imageUrl);
+              // This can happen if the user cancels the share. Fallback to download.
+              if (error.name !== "AbortError") {
+                console.log("Share failed, falling back to download.", error);
+                triggerDownload(imageUrl);
+              }
             }
           } else {
             triggerDownload(imageUrl);
@@ -437,7 +456,7 @@ export default function EditPage() {
         },
         "image/jpeg",
         0.9
-      ); // Use JPEG for smaller file size
+      ); // Use JPEG with 90% quality for smaller file size
     } catch (error) {
       console.error("Failed to capture image:", error);
       alert("Sorry, something went wrong while saving the image.");
@@ -458,6 +477,7 @@ export default function EditPage() {
               <div className="imageWrapper" ref={imageWrapperRef}>
                 <img
                   src={imageSrc}
+                  crossOrigin="anonymous" /* Crucial for canvas capturing */
                   alt="Image preview"
                   className="imagePreview"
                   style={{ filter: getCssFilterString() }}
@@ -495,8 +515,6 @@ export default function EditPage() {
             onChange={handleImageUpload}
             style={{ display: "none" }}
           />
-          {/* The canvas is no longer needed for direct drawing */}
-          {/* <canvas ref={canvasRef} style={{ display: "none" }}></canvas> */}
 
           {/* --- CONTROLS PANEL --- */}
           <div className="controlsContainer">
@@ -642,9 +660,13 @@ export default function EditPage() {
                 <button
                   onClick={handleSaveImage}
                   className="saveButton"
-                  disabled={isSaving}
+                  disabled={isSaving || !isLibraryReady}
                 >
-                  {isSaving ? "Saving..." : "Save or Share Image"}
+                  {isSaving
+                    ? "Saving..."
+                    : !isLibraryReady
+                    ? "Editor Loading..."
+                    : "Save or Share Image"}
                 </button>
               </>
             )}
