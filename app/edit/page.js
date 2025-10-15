@@ -1,6 +1,6 @@
 // app/edit/page.js
-
-"use client";
+import html2canvas from "html2canvas";
+("use client");
 
 import { useState, useRef } from "react";
 import Image from "next/image";
@@ -131,66 +131,51 @@ export default function EditPage() {
   // --- ⬇️ UNIVERSAL SAVE IMAGE FUNCTION (Desktop + Mobile) ⬇️ ---
   // ==========================================================
   const handleSaveImage = async () => {
-    if (!originalImageRef.current || !canvasRef.current || !imageRef.current)
-      return;
+    const previewElement = document.querySelector(`.${styles.imageWrapper}`);
+    if (!previewElement) return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    try {
+      // Capture exactly what's visible on screen (filters + overlays + text)
+      const canvas = await html2canvas(previewElement, {
+        useCORS: true,
+        backgroundColor: null,
+        scale: 2, // Higher quality
+      });
 
-    const img = originalImageRef.current;
-    const displayedImg = imageRef.current;
+      // Convert to Blob
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const file = new File([blob], "edited-image.png", {
+          type: "image/png",
+        });
+        const fileURL = URL.createObjectURL(blob);
 
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    // Draw displayed image (with filters already applied)
-    ctx.drawImage(displayedImg, 0, 0, canvas.width, canvas.height);
-
-    // --- Draw text ---
-    const selectedFont =
-      fonts.find((f) => f.className === textFont) || fonts[0];
-    const scaledTextSize = textSize * (canvas.width / displayedImg.clientWidth);
-    ctx.font = `${scaledTextSize}px ${selectedFont.name}`;
-    ctx.fillStyle = textColor;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-    // Convert canvas to Blob
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-
-      const file = new File([blob], "edited-image.png", { type: "image/png" });
-      const fileURL = URL.createObjectURL(blob);
-
-      // Detect mobile device
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-      try {
         if (isMobile) {
-          // --- Mobile (Android / iOS) ---
-          // 1️⃣ Attempt native share (optional)
+          // Try native share first
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: "My Edited Image",
-              text: "Edited with Photo Editor",
-            });
-            return; // done if shared
+            try {
+              await navigator.share({
+                files: [file],
+                title: "My Edited Image",
+                text: "Check out my edited image!",
+              });
+              return;
+            } catch (err) {
+              console.error("Share canceled or failed:", err);
+            }
           }
 
-          // 2️⃣ Direct gallery download (works in Safari/Chrome)
+          // Fallback: download on mobile (goes to gallery)
           const link = document.createElement("a");
           link.href = fileURL;
           link.download = "edited-image.png";
-          link.style.display = "none";
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-
-          // Some mobile browsers open a “Save to Files / Photos” dialog automatically
         } else {
-          // --- Desktop (Windows, macOS, Linux) ---
+          // Desktop download
           const link = document.createElement("a");
           link.download = "edited-image.png";
           link.href = fileURL;
@@ -198,13 +183,13 @@ export default function EditPage() {
           link.click();
           document.body.removeChild(link);
         }
-      } catch (err) {
-        console.error("Save failed:", err);
-        alert("Sorry, saving the image failed. Try again.");
-      } finally {
+
         URL.revokeObjectURL(fileURL);
-      }
-    }, "image/png");
+      }, "image/png");
+    } catch (err) {
+      console.error("Error capturing image:", err);
+      alert("Failed to save image. Please try again.");
+    }
   };
 
   // --- JSX RENDER ---
