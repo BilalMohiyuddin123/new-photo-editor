@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 // --- FONT DEFINITIONS ---
 // We define class names that we'll use in our CSS.
@@ -307,10 +307,20 @@ export default function EditPage() {
   const [textFont, setTextFont] = useState(fonts[0].className);
   const [textSize, setTextSize] = useState(50);
   const [isSaving, setIsSaving] = useState(false);
-  const imageRef = useRef(null);
-  const canvasRef = useRef(null);
-  const originalImageRef = useRef(null);
+  const imageWrapperRef = useRef(null); // Ref for the element to capture
   const uploadInputRef = useRef(null);
+
+  // Dynamically load the html2canvas library
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src =
+      "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   // --- IMAGE & FILTER LOGIC ---
   const handleImageUpload = (e) => {
@@ -319,11 +329,6 @@ export default function EditPage() {
       const reader = new FileReader();
       reader.onload = (event) => {
         setImageSrc(event.target.result);
-        const img = new window.Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          originalImageRef.current = img;
-        };
       };
       reader.readAsDataURL(file);
     }
@@ -376,135 +381,68 @@ export default function EditPage() {
   };
 
   const handleSaveImage = async () => {
-    if (!originalImageRef.current || !canvasRef.current || !imageRef.current)
+    if (!imageWrapperRef.current || typeof html2canvas === "undefined") {
+      alert("Component is not ready yet, please wait a moment.");
       return;
+    }
 
     setIsSaving(true);
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    try {
+      const canvas = await html2canvas(imageWrapperRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        // Capture at 2x resolution to improve quality vs screen resolution
+        scale: 2,
+      });
 
-    const originalImage = originalImageRef.current;
-    const displayedImgElement = imageRef.current;
+      const triggerDownload = (imageUrl) => {
+        const link = document.createElement("a");
+        link.href = imageUrl;
+        link.download = "edited-image.jpg";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
 
-    canvas.width = originalImage.naturalWidth;
-    canvas.height = originalImage.naturalHeight;
+      canvas.toBlob(
+        async (blob) => {
+          if (!blob) {
+            setIsSaving(false);
+            return;
+          }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const file = new File([blob], "edited-image.jpg", {
+            type: "image/jpeg",
+          });
+          const imageUrl = URL.createObjectURL(blob);
 
-    ctx.filter = getCssFilterString();
-    ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
-    ctx.filter = "none";
-
-    if (activeEffects.vignette) {
-      const gradient = ctx.createRadialGradient(
-        canvas.width / 2,
-        canvas.height / 2,
-        canvas.width * 0.3,
-        canvas.width / 2,
-        canvas.height / 2,
-        canvas.width * 0.7
-      );
-      gradient.addColorStop(0, "rgba(0,0,0,0)");
-      gradient.addColorStop(1, "rgba(0,0,0,0.5)");
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    if (activeEffects.grain) {
-      ctx.save();
-      ctx.globalAlpha = 0.1;
-      for (let i = 0; i < canvas.width * canvas.height * 0.1; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const size = Math.random() * 1.5;
-        const color = Math.random() > 0.5 ? 255 : 0;
-        ctx.fillStyle = `rgba(${color},${color},${color}, ${
-          Math.random() * 0.5
-        })`;
-        ctx.fillRect(x, y, size, size);
-      }
-      ctx.restore();
-    }
-
-    if (activeEffects.dust) {
-      ctx.save();
-      ctx.globalAlpha = 0.4;
-      for (let i = 0; i < 200; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const length = Math.random() * 25;
-        const angle = Math.random() * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.4})`;
-        ctx.lineWidth = Math.random() * 0.8;
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    const selectedFontDetails =
-      fonts.find((f) => f.className === textFont) || fonts[0];
-    const scaledTextSize =
-      textSize * (canvas.width / displayedImgElement.clientWidth);
-    ctx.font = `${scaledTextSize}px "${selectedFontDetails.name}"`;
-    ctx.fillStyle = textColor;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-    ctx.shadowBlur = 5;
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-    // Helper function for the download fallback
-    const triggerDownload = (imageUrl) => {
-      const link = document.createElement("a");
-      link.href = imageUrl;
-      link.download = "edited-image.png";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    };
-
-    canvas.toBlob(
-      async (blob) => {
-        if (!blob) {
-          setIsSaving(false);
-          return;
-        }
-
-        const file = new File([blob], "edited-image.png", {
-          type: "image/png",
-        });
-        const imageUrl = URL.createObjectURL(blob);
-
-        // --- Professional Save/Share Logic ---
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: "Edited Image",
-              text: "Check out this image I created!",
-            });
-          } catch (error) {
-            console.log(
-              "Share failed or was cancelled, falling back to download.",
-              error
-            );
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: "Edited Image",
+                text: "Check out this image I created!",
+              });
+            } catch (error) {
+              console.log("Share failed, falling back to download.", error);
+              triggerDownload(imageUrl);
+            }
+          } else {
             triggerDownload(imageUrl);
           }
-        } else {
-          triggerDownload(imageUrl);
-        }
 
-        // Clean up the created URL
-        URL.revokeObjectURL(imageUrl);
-        setIsSaving(false);
-      },
-      "image/png",
-      0.95
-    );
+          URL.revokeObjectURL(imageUrl);
+          setIsSaving(false);
+        },
+        "image/jpeg",
+        0.9
+      ); // Use JPEG for smaller file size
+    } catch (error) {
+      console.error("Failed to capture image:", error);
+      alert("Sorry, something went wrong while saving the image.");
+      setIsSaving(false);
+    }
   };
 
   // --- JSX RENDER ---
@@ -517,9 +455,8 @@ export default function EditPage() {
           {/* --- IMAGE PREVIEW --- */}
           <div className="previewContainer">
             {imageSrc ? (
-              <div className="imageWrapper">
+              <div className="imageWrapper" ref={imageWrapperRef}>
                 <img
-                  ref={imageRef}
                   src={imageSrc}
                   alt="Image preview"
                   className="imagePreview"
@@ -558,7 +495,8 @@ export default function EditPage() {
             onChange={handleImageUpload}
             style={{ display: "none" }}
           />
-          <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
+          {/* The canvas is no longer needed for direct drawing */}
+          {/* <canvas ref={canvasRef} style={{ display: "none" }}></canvas> */}
 
           {/* --- CONTROLS PANEL --- */}
           <div className="controlsContainer">
