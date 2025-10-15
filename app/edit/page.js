@@ -1,26 +1,17 @@
-// app/edit/page.js
-import html2canvas from "html2canvas";
-("use client");
+"use client";
 
-import { useState, useRef } from "react";
-import Image from "next/image";
-import { Inter, Lobster, Bebas_Neue, Special_Elite } from "next/font/google";
-import styles from "./Edit.module.css";
+import React, { useState, useRef } from "react";
 
 // --- FONT DEFINITIONS ---
-const inter = Inter({ subsets: ["latin"] });
-const lobster = Lobster({ weight: "400", subsets: ["latin"] });
-const bebasNeue = Bebas_Neue({ weight: "400", subsets: ["latin"] });
-const specialElite = Special_Elite({ weight: "400", subsets: ["latin"] });
-
+// We define class names that we'll use in our CSS.
 const fonts = [
-  { id: "inter", name: "Inter", className: inter.className },
-  { id: "lobster", name: "Lobster", className: lobster.className },
-  { id: "bebasNeue", name: "Bebas Neue", className: bebasNeue.className },
+  { id: "inter", name: "Inter", className: "font-inter" },
+  { id: "lobster", name: "Lobster", className: "font-lobster" },
+  { id: "bebasNeue", name: "Bebas Neue", className: "font-bebas-neue" },
   {
     id: "specialElite",
     name: "Special Elite",
-    className: specialElite.className,
+    className: "font-special-elite",
   },
 ];
 
@@ -60,6 +51,250 @@ const effects = [
   { id: "grain", name: "Film Grain" },
 ];
 
+// --- STYLES COMPONENT ---
+// All styles are now included directly in the component to avoid external file errors.
+const Styles = () => (
+  <style>{`
+    /* FONT IMPORTS */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Lobster&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Special+Elite&display=swap');
+
+    /* FONT CLASSES */
+    .font-inter { font-family: 'Inter', sans-serif; }
+    .font-lobster { font-family: 'Lobster', cursive; }
+    .font-bebas-neue { font-family: 'Bebas Neue', cursive; }
+    .font-special-elite { font-family: 'Special Elite', cursive; }
+    
+    /* GENERAL STYLES */
+    .main {
+      font-family: 'Inter', sans-serif;
+      background-color: #1a1a1a;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .appTitle {
+        text-align: center;
+        font-family: 'Bebas Neue', cursive;
+        font-size: 2rem;
+        letter-spacing: 2px;
+        color: #f0f0f0;
+        padding: 0.5rem;
+        background-color: #252525;
+        margin: 0;
+    }
+    .editorLayout {
+      display: flex;
+      flex-grow: 1;
+      width: 100%;
+    }
+    .previewContainer {
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+      background-color: #111;
+      position: relative;
+    }
+    .imageWrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .imagePreview {
+      max-width: 100%;
+      max-height: 80vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    /* OVERLAYS */
+    .vignetteOverlay, .dustOverlay, .grainOverlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      border-radius: 8px;
+    }
+    .vignetteOverlay {
+       box-shadow: inset 0 0 10vw 2vw #000;
+    }
+    .grainOverlay {
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)" opacity="0.15"/></svg>');
+    }
+    .dustOverlay {
+      background-image: url("data:image/svg+xml,%3Csvg width='6' height='6' viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.1' fill-rule='evenodd'%3E%3Cpath d='M5 0h1L0 6V5zM6 5v1H5z'/%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    .textOverlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
+      padding: 1rem;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .uploadPlaceholder {
+      text-align: center;
+      padding: 2rem;
+      border: 2px dashed #444;
+      border-radius: 12px;
+    }
+    .uploadButton, .saveButton {
+      background-color: #4a4aef;
+      color: white;
+      border: none;
+      padding: 0.8rem 1.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.2s;
+      margin-top: 1rem;
+    }
+    .uploadButton:hover, .saveButton:hover {
+      background-color: #6a6aff;
+      transform: translateY(-2px);
+    }
+    .saveButton {
+        width: calc(100% - 2rem);
+        margin: 1rem;
+    }
+    .saveButton:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
+
+    /* CONTROLS */
+    .controlsContainer {
+      width: 350px;
+      background-color: #252525;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .mobileTabs { display: none; }
+    .controlsContent { flex-grow: 1; }
+    .controlSection { padding: 1.5rem; }
+    .sectionTitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      font-size: 1.25rem;
+      border-bottom: 1px solid #444;
+      padding-bottom: 0.75rem;
+    }
+    .itemGrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 1rem;
+    }
+    .filterItem, .effectItem { text-align: center; cursor: pointer; }
+    .filterItem img, .effectPreview {
+      width: 80px;
+      height: 80px;
+      border-radius: 6px;
+      border: 3px solid transparent;
+      transition: border-color 0.2s;
+      object-fit: cover;
+    }
+    .filterItem span, .effectItem span {
+      display: block;
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+    }
+    .selectedItem {
+      border-color: #4a4aef;
+    }
+    .sliderContainer { margin-top: 1.5rem; }
+    .sliderContainer label { margin-right: 1rem; }
+
+    /* EFFECTS */
+    .effectPreview {
+      background-color: #555;
+      display: inline-block;
+      position: relative;
+      overflow: hidden;
+    }
+    .vignettePreview {
+       box-shadow: inset 0 0 20px 5px #000;
+    }
+    .dustPreview {
+        background-image: url("data:image/svg+xml,%3Csvg width='6' height='6' viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.4' fill-rule='evenodd'%3E%3Cpath d='M5 0h1L0 6V5zM6 5v1H5z'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    .grainPreview::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)" opacity="0.3"/></svg>');
+    }
+    
+    /* TEXT */
+    .textInput {
+      width: 100%;
+      background: #333;
+      border: 1px solid #555;
+      color: white;
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+    .textSettings { display: flex; align-items: center; gap: 1.5rem; margin: 1.5rem 0; }
+    .colorPickerWrapper { display: flex; align-items: center; gap: 0.5rem; }
+    .fontSelector { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .fontSelector button {
+      background: #333;
+      border: 1px solid #555;
+      color: white;
+      padding: 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .selectedFont { background: #4a4aef !important; }
+
+    /* RESPONSIVE STYLES */
+    @media (max-width: 768px) {
+      .appTitle { font-size: 1.5rem; padding: 0.75rem; }
+      .editorLayout { flex-direction: column; }
+      .controlsContainer { width: 100%; height: 50vh; border-top: 2px solid #444; }
+      .imagePreview { max-height: 45vh; }
+      .mobileTabs {
+          display: flex;
+          justify-content: space-around;
+          background-color: #1a1a1a;
+      }
+      .mobileTabs button {
+          padding: 1rem;
+          background: none;
+          border: none;
+          color: #aaa;
+          font-size: 1rem;
+          cursor: pointer;
+          flex-grow: 1;
+          border-bottom: 3px solid transparent;
+          transition: color 0.2s, border-color 0.2s;
+      }
+      .mobileTabs .activeTab {
+          color: white;
+          border-bottom-color: #4a4aef;
+      }
+      .controlSection { display: none; }
+      .activeSection { display: block; }
+    }
+  `}</style>
+);
+
 export default function EditPage() {
   // --- STATE MANAGEMENT ---
   const [imageSrc, setImageSrc] = useState(null);
@@ -71,6 +306,7 @@ export default function EditPage() {
   const [textColor, setTextColor] = useState("#ffffff");
   const [textFont, setTextFont] = useState(fonts[0].className);
   const [textSize, setTextSize] = useState(50);
+  const [isSaving, setIsSaving] = useState(false);
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
   const originalImageRef = useRef(null);
@@ -117,293 +353,366 @@ export default function EditPage() {
     return filterString;
   };
 
+  const getThumbnailFilterString = (filter) => {
+    if (!filter || filter.id === "none") return "none";
+    let filterString = "";
+    const props = filter.properties;
+    if (props.brightness !== undefined)
+      filterString += `brightness(${props.brightness}%) `;
+    if (props.contrast !== undefined)
+      filterString += `contrast(${props.contrast}%) `;
+    if (props.saturate !== undefined)
+      filterString += `saturate(${props.saturate}%) `;
+    if (props.grayscale !== undefined)
+      filterString += `grayscale(${props.grayscale}%) `;
+    if (props.sepia !== undefined) filterString += `sepia(${props.sepia}%) `;
+    if (props["hue-rotate"] !== undefined)
+      filterString += `hue-rotate(${props["hue-rotate"]}deg)`;
+    return filterString.trim();
+  };
+
   const toggleEffect = (effectId) => {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
   };
 
-  // ==========================================================
-  // --- ⬇️ MODIFIED SAVE/SHARE IMAGE FUNCTION ⬇️ ---
-  // ==========================================================
-  // ==========================================================
-  // --- ⬇️ FULLY CORRECTED SAVE/SHARE IMAGE FUNCTION ⬇️ ---
-  // ==========================================================
-  // ==========================================================
-  // --- ⬇️ UNIVERSAL SAVE IMAGE FUNCTION (Desktop + Mobile) ⬇️ ---
-  // ==========================================================
   const handleSaveImage = async () => {
-    const previewElement = document.querySelector(`.${styles.imageWrapper}`);
-    if (!previewElement) return;
+    if (!originalImageRef.current || !canvasRef.current || !imageRef.current)
+      return;
 
-    try {
-      // Capture exactly what's visible on screen (filters + overlays + text)
-      const canvas = await html2canvas(previewElement, {
-        useCORS: true,
-        backgroundColor: null,
-        scale: 2, // Higher quality
-      });
+    setIsSaving(true);
 
-      // Convert to Blob
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    const originalImage = originalImageRef.current;
+    const displayedImgElement = imageRef.current;
+
+    canvas.width = originalImage.naturalWidth;
+    canvas.height = originalImage.naturalHeight;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.filter = getCssFilterString();
+    ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+    ctx.filter = "none";
+
+    if (activeEffects.vignette) {
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width * 0.3,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width * 0.7
+      );
+      gradient.addColorStop(0, "rgba(0,0,0,0)");
+      gradient.addColorStop(1, "rgba(0,0,0,0.5)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    if (activeEffects.grain) {
+      ctx.save();
+      ctx.globalAlpha = 0.1;
+      for (let i = 0; i < canvas.width * canvas.height * 0.1; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = Math.random() * 1.5;
+        const color = Math.random() > 0.5 ? 255 : 0;
+        ctx.fillStyle = `rgba(${color},${color},${color}, ${
+          Math.random() * 0.5
+        })`;
+        ctx.fillRect(x, y, size, size);
+      }
+      ctx.restore();
+    }
+
+    if (activeEffects.dust) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      for (let i = 0; i < 200; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const length = Math.random() * 25;
+        const angle = Math.random() * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.4})`;
+        ctx.lineWidth = Math.random() * 0.8;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    const selectedFontDetails =
+      fonts.find((f) => f.className === textFont) || fonts[0];
+    const scaledTextSize =
+      textSize * (canvas.width / displayedImgElement.clientWidth);
+    ctx.font = `${scaledTextSize}px "${selectedFontDetails.name}"`;
+    ctx.fillStyle = textColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 5;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    // Helper function for the download fallback
+    const triggerDownload = (imageUrl) => {
+      const link = document.createElement("a");
+      link.href = imageUrl;
+      link.download = "edited-image.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) {
+          setIsSaving(false);
+          return;
+        }
+
         const file = new File([blob], "edited-image.png", {
           type: "image/png",
         });
-        const fileURL = URL.createObjectURL(blob);
+        const imageUrl = URL.createObjectURL(blob);
 
-        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-        if (isMobile) {
-          // Try native share first
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({
-                files: [file],
-                title: "My Edited Image",
-                text: "Check out my edited image!",
-              });
-              return;
-            } catch (err) {
-              console.error("Share canceled or failed:", err);
-            }
+        // --- Professional Save/Share Logic ---
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: "Edited Image",
+              text: "Check out this image I created!",
+            });
+          } catch (error) {
+            console.log(
+              "Share failed or was cancelled, falling back to download.",
+              error
+            );
+            triggerDownload(imageUrl);
           }
-
-          // Fallback: download on mobile (goes to gallery)
-          const link = document.createElement("a");
-          link.href = fileURL;
-          link.download = "edited-image.png";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
         } else {
-          // Desktop download
-          const link = document.createElement("a");
-          link.download = "edited-image.png";
-          link.href = fileURL;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          triggerDownload(imageUrl);
         }
 
-        URL.revokeObjectURL(fileURL);
-      }, "image/png");
-    } catch (err) {
-      console.error("Error capturing image:", err);
-      alert("Failed to save image. Please try again.");
-    }
+        // Clean up the created URL
+        URL.revokeObjectURL(imageUrl);
+        setIsSaving(false);
+      },
+      "image/png",
+      0.95
+    );
   };
 
   // --- JSX RENDER ---
   return (
-    <main className={styles.main}>
-      <div className={styles.editorLayout}>
-        {/* --- IMAGE PREVIEW --- */}
-        <div className={styles.previewContainer}>
-          {imageSrc ? (
-            <div className={styles.imageWrapper}>
-              <img
-                ref={imageRef}
-                src={imageSrc}
-                alt="Image preview"
-                className={styles.imagePreview}
-                style={{ filter: getCssFilterString() }}
-              />
-              {activeEffects.vignette && (
-                <div className={styles.vignetteOverlay}></div>
-              )}
-              {activeEffects.dust && <div className={styles.dustOverlay}></div>}
-              {activeEffects.grain && (
-                <div className={styles.grainOverlay}></div>
-              )}
-              <div
-                className={`${styles.textOverlay} ${textFont}`}
-                style={{ color: textColor, fontSize: `${textSize}px` }}
-              >
-                {text}
-              </div>
-            </div>
-          ) : (
-            <div className={styles.uploadPlaceholder}>
-              <p>Upload an image to start editing</p>
-              <button
-                onClick={() => uploadInputRef.current.click()}
-                className={styles.uploadButton}
-              >
-                Choose Image
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* --- HIDDEN ELEMENTS --- */}
-        <input
-          type="file"
-          accept="image/*"
-          ref={uploadInputRef}
-          onChange={handleImageUpload}
-          style={{ display: "none" }}
-        />
-        <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
-
-        {/* --- CONTROLS PANEL --- */}
-        <div className={styles.controlsContainer}>
-          {imageSrc && (
-            <>
-              {/* Mobile Tab Navigation */}
-              <div className={styles.mobileTabs}>
-                <button
-                  onClick={() => setActiveTab("filters")}
-                  className={activeTab === "filters" ? styles.activeTab : ""}
-                >
-                  Filters
-                </button>
-                <button
-                  onClick={() => setActiveTab("effects")}
-                  className={activeTab === "effects" ? styles.activeTab : ""}
-                >
-                  Effects
-                </button>
-                <button
-                  onClick={() => setActiveTab("text")}
-                  className={activeTab === "text" ? styles.activeTab : ""}
-                >
-                  Text
-                </button>
-              </div>
-
-              <div className={styles.controlsContent}>
-                {/* Filters Section */}
+    <>
+      <Styles />
+      <main className="main">
+        <h1 className="appTitle">Photo Editor Pro</h1>
+        <div className="editorLayout">
+          {/* --- IMAGE PREVIEW --- */}
+          <div className="previewContainer">
+            {imageSrc ? (
+              <div className="imageWrapper">
+                <img
+                  ref={imageRef}
+                  src={imageSrc}
+                  alt="Image preview"
+                  className="imagePreview"
+                  style={{ filter: getCssFilterString() }}
+                />
+                {activeEffects.vignette && (
+                  <div className="vignetteOverlay"></div>
+                )}
+                {activeEffects.dust && <div className="dustOverlay"></div>}
+                {activeEffects.grain && <div className="grainOverlay"></div>}
                 <div
-                  className={`${styles.controlSection} ${
-                    activeTab === "filters" ? styles.activeSection : ""
-                  }`}
+                  className={`textOverlay ${textFont}`}
+                  style={{ color: textColor, fontSize: `${textSize}px` }}
                 >
-                  <h3 className={styles.sectionTitle}>Filters</h3>
-                  <div className={styles.itemGrid}>
-                    {filters.map((filter) => (
-                      <div
-                        key={filter.id}
-                        className={styles.filterItem}
-                        onClick={() => setSelectedFilter(filter.id)}
-                      >
-                        <Image
-                          src={imageSrc}
-                          alt={filter.name}
-                          width={80}
-                          height={80}
-                          style={{
-                            filter: getCssFilterString(), // This seems complex for a preview, but let's keep it
-                          }}
-                          className={
-                            selectedFilter === filter.id
-                              ? styles.selectedItem
-                              : ""
-                          }
-                        />
-                        <span>{filter.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {selectedFilter !== "none" && (
-                    <div className={styles.sliderContainer}>
-                      <label>Intensity</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="150"
-                        value={filterIntensity}
-                        onChange={(e) => setFilterIntensity(e.target.value)}
-                      />
-                      <span>{filterIntensity}%</span>
-                    </div>
-                  )}
+                  {text}
+                </div>
+              </div>
+            ) : (
+              <div className="uploadPlaceholder">
+                <p>Upload an image to start editing</p>
+                <button
+                  onClick={() => uploadInputRef.current.click()}
+                  className="uploadButton"
+                >
+                  Choose Image
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* --- HIDDEN ELEMENTS --- */}
+          <input
+            type="file"
+            accept="image/*"
+            ref={uploadInputRef}
+            onChange={handleImageUpload}
+            style={{ display: "none" }}
+          />
+          <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
+
+          {/* --- CONTROLS PANEL --- */}
+          <div className="controlsContainer">
+            {imageSrc && (
+              <>
+                <div className="mobileTabs">
+                  <button
+                    onClick={() => setActiveTab("filters")}
+                    className={activeTab === "filters" ? "activeTab" : ""}
+                  >
+                    Filters
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("effects")}
+                    className={activeTab === "effects" ? "activeTab" : ""}
+                  >
+                    Effects
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("text")}
+                    className={activeTab === "text" ? "activeTab" : ""}
+                  >
+                    Text
+                  </button>
                 </div>
 
-                {/* Effects Section */}
-                <div
-                  className={`${styles.controlSection} ${
-                    activeTab === "effects" ? styles.activeSection : ""
-                  }`}
-                >
-                  <h3 className={styles.sectionTitle}>Effects</h3>
-                  <div className={styles.itemGrid}>
-                    {effects.map((effect) => (
-                      <div
-                        key={effect.id}
-                        className={styles.effectItem}
-                        onClick={() => toggleEffect(effect.id)}
-                      >
+                <div className="controlsContent">
+                  <div
+                    className={`controlSection ${
+                      activeTab === "filters" ? "activeSection" : ""
+                    }`}
+                  >
+                    <h3 className="sectionTitle">Filters</h3>
+                    <div className="itemGrid">
+                      {filters.map((filter) => (
                         <div
-                          className={`${styles.effectPreview} ${
-                            styles[effect.id + "Preview"]
-                          } ${
-                            activeEffects[effect.id] ? styles.selectedItem : ""
-                          }`}
-                        ></div>
-                        <span>{effect.name}</span>
+                          key={filter.id}
+                          className="filterItem"
+                          onClick={() => setSelectedFilter(filter.id)}
+                        >
+                          <img
+                            src={imageSrc}
+                            alt={filter.name}
+                            width="80"
+                            height="80"
+                            style={{
+                              filter: getThumbnailFilterString(filter),
+                            }}
+                            className={
+                              selectedFilter === filter.id ? "selectedItem" : ""
+                            }
+                          />
+                          <span>{filter.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedFilter !== "none" && (
+                      <div className="sliderContainer">
+                        <label>Intensity</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="150"
+                          value={filterIntensity}
+                          onChange={(e) => setFilterIntensity(e.target.value)}
+                        />
+                        <span>{filterIntensity}%</span>
                       </div>
-                    ))}
+                    )}
+                  </div>
+                  <div
+                    className={`controlSection ${
+                      activeTab === "effects" ? "activeSection" : ""
+                    }`}
+                  >
+                    <h3 className="sectionTitle">Effects</h3>
+                    <div className="itemGrid">
+                      {effects.map((effect) => (
+                        <div
+                          key={effect.id}
+                          className="effectItem"
+                          onClick={() => toggleEffect(effect.id)}
+                        >
+                          <div
+                            className={`effectPreview ${effect.id}Preview ${
+                              activeEffects[effect.id] ? "selectedItem" : ""
+                            }`}
+                          ></div>
+                          <span>{effect.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div
+                    className={`controlSection ${
+                      activeTab === "text" ? "activeSection" : ""
+                    }`}
+                  >
+                    <h3 className="sectionTitle">Text</h3>
+                    <input
+                      type="text"
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      className="textInput"
+                    />
+                    <div className="textSettings">
+                      <div className="colorPickerWrapper">
+                        <label>Color</label>
+                        <input
+                          type="color"
+                          value={textColor}
+                          onChange={(e) => setTextColor(e.target.value)}
+                        />
+                      </div>
+                      <div className="sliderContainer">
+                        <label>Size</label>
+                        <input
+                          type="range"
+                          min="10"
+                          max="150"
+                          value={textSize}
+                          onChange={(e) => setTextSize(e.target.value)}
+                        />
+                        <span>{textSize}px</span>
+                      </div>
+                    </div>
+                    <div className="fontSelector">
+                      {fonts.map((font) => (
+                        <button
+                          key={font.id}
+                          className={`${font.className} ${
+                            textFont === font.className ? "selectedFont" : ""
+                          }`}
+                          onClick={() => setTextFont(font.className)}
+                        >
+                          {font.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* Text Section */}
-                <div
-                  className={`${styles.controlSection} ${
-                    activeTab === "text" ? styles.activeSection : ""
-                  }`}
+                <button
+                  onClick={handleSaveImage}
+                  className="saveButton"
+                  disabled={isSaving}
                 >
-                  <h3 className={styles.sectionTitle}>Text</h3>
-                  <input
-                    type="text"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    className={styles.textInput}
-                  />
-                  <div className={styles.textSettings}>
-                    <div className={styles.colorPickerWrapper}>
-                      <label>Color</label>
-                      <input
-                        type="color"
-                        value={textColor}
-                        onChange={(e) => setTextColor(e.target.value)}
-                        className={styles.colorPicker}
-                      />
-                    </div>
-                    <div className={styles.sliderContainer}>
-                      <label>Size</label>
-                      <input
-                        type="range"
-                        min="10"
-                        max="150"
-                        value={textSize}
-                        onChange={(e) => setTextSize(e.target.value)}
-                      />
-                      <span>{textSize}px</span>
-                    </div>
-                  </div>
-                  <div className={styles.fontSelector}>
-                    {fonts.map((font) => (
-                      <button
-                        key={font.id}
-                        className={`${font.className} ${
-                          textFont === font.className ? styles.selectedFont : ""
-                        }`}
-                        onClick={() => setTextFont(font.className)}
-                      >
-                        {font.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* --- MODIFIED BUTTON TEXT --- */}
-              <button onClick={handleSaveImage} className={styles.saveButton}>
-                Save or Share Image
-              </button>
-            </>
-          )}
+                  {isSaving ? "Saving..." : "Save or Share Image"}
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
