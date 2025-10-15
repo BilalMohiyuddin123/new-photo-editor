@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-
+import domtoimage from "dom-to-image-more";
 // --- FONT DEFINITIONS ---
 // We define class names that we'll use in our CSS.
 const fonts = [
@@ -409,63 +409,47 @@ export default function EditPage() {
   };
 
   const handleSaveImage = async () => {
-    if (!imageWrapperRef.current || !isLibraryReady || !isImageLoaded) {
-      alert("Please wait — the image and editor must finish loading.");
+    if (!imageWrapperRef.current) {
+      alert("Please upload and edit an image first!");
       return;
     }
 
     setIsSaving(true);
 
     try {
+      const node = imageWrapperRef.current;
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const canvas = await html2canvas(imageWrapperRef.current, {
-        useCORS: true,
-        scale: isMobile ? 1 : 2,
-        backgroundColor: "#111",
-      });
 
-      const blob = await new Promise((resolve) =>
-        canvas.toBlob(resolve, "image/jpeg", 0.95)
-      );
-      if (!blob) throw new Error("Image blob creation failed.");
+      // Convert the element to a Blob (JPEG)
+      const blob = await domtoimage.toBlob(node, {
+        quality: 0.95,
+        bgcolor: "#111",
+        style: { transform: "scale(1)", transformOrigin: "top left" },
+      });
 
       const file = new File([blob], "edited-image.jpg", { type: "image/jpeg" });
       const imageUrl = URL.createObjectURL(blob);
 
-      if (isMobile) {
-        // --- 📱 Mobile handling ---
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: "Edited Image",
-              text: "Check out this image I created!",
-            });
-            // shared successfully
-          } catch (err) {
-            console.warn("Share failed:", err);
-            // fallback to open image (for manual save)
-            window.open(imageUrl, "_blank");
-          }
-        } else {
-          // Fallback: open image in a new tab so user can long-press or "Save Image"
-          window.open(imageUrl, "_blank");
-        }
+      if (
+        isMobile &&
+        navigator.canShare &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          files: [file],
+          title: "Edited Image",
+        });
       } else {
-        // --- 💻 Desktop handling ---
         const link = document.createElement("a");
         link.href = imageUrl;
         link.download = "edited-image.jpg";
-        document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
       }
 
-      // Cleanup
       setTimeout(() => URL.revokeObjectURL(imageUrl), 5000);
-    } catch (error) {
-      console.error("Error saving image:", error);
-      alert("Failed to save image. Please check the console for details.");
+    } catch (err) {
+      console.error("Error exporting image:", err);
+      alert("Failed to save image.");
     } finally {
       setIsSaving(false);
     }
