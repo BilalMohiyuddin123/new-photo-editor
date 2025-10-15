@@ -1,10 +1,350 @@
-.editor {
-  text-align: center;
-  padding: 50px;
-  background-color: #fafafa;
-  color: #222;
+/* app/edit/Edit.module.css */
+
+:root {
+  --background-dark: #111827;
+  --background-light: #1f2937;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --accent-color: #6366f1;
+  --accent-hover: #4f46e5;
+  --border-color: #374151;
 }
 
-.editor h2 {
-  color: #0066ff;
+.main {
+  background-color: var(--background-dark);
+  color: var(--text-primary);
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  font-family: Arial, sans-serif;
+}
+
+.editorLayout {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  max-width: 1400px;
+  height: 90vh;
+  gap: 1.5rem;
+  background-color: var(--background-dark);
+}
+
+/* --- Preview Container --- */
+.previewContainer {
+  flex: 3;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--background-light);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border-color);
+}
+
+.imageWrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.imagePreview {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: filter 0.2s ease-in-out;
+}
+
+.uploadPlaceholder {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.uploadButton {
+  background-color: var(--accent-color);
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 1rem;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.uploadButton:hover {
+  background-color: var(--accent-hover);
+}
+
+/* --- Controls Container --- */
+.controlsContainer {
+  flex: 1.2;
+  min-width: 320px;
+  background-color: var(--background-light);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+}
+
+.controlsContent {
+  flex-grow: 1;
+}
+
+.mobileTabs {
+  display: none;
+}
+
+.controlSection {
+  margin-bottom: 2rem;
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--accent-color);
+}
+
+/* Items Grid (Filters & Effects) */
+.itemGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 1rem;
+}
+
+.filterItem,
+.effectItem {
+  cursor: pointer;
+  text-align: center;
+}
+
+.filterItem span,
+.effectItem span {
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.filterItem img,
+.effectPreview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.filterItem:hover img,
+.effectItem:hover .effectPreview {
+  border-color: var(--accent-hover);
+}
+
+.selectedItem {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 10px var(--accent-color);
+}
+
+/* Slider */
+.sliderContainer {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.sliderContainer label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.sliderContainer input[type="range"] {
+  flex-grow: 1;
+}
+
+/* Text Controls */
+.textInput {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: var(--background-dark);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+}
+.textSettings {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.colorPickerWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.colorPicker {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.fontSelector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.fontSelector button {
+  background-color: var(--background-dark);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.fontSelector button:hover {
+  background-color: #374151;
+}
+.selectedFont {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+}
+
+/* Overlays */
+.vignetteOverlay,
+.dustOverlay,
+.grainOverlay,
+.textOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-radius: 12px;
+}
+.vignetteOverlay {
+  box-shadow: inset 0 0 100px 30px rgba(0, 0, 0, 0.8);
+}
+.dustOverlay {
+  background-image: url("https://www.transparenttextures.com/patterns/dust.png");
+  opacity: 0.2;
+}
+.grainOverlay {
+  background-image: url("https://www.transparenttextures.com/patterns/noise.png");
+  opacity: 0.1;
+}
+.textOverlay {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Effect Previews */
+.vignettePreview {
+  background-color: #555;
+  box-shadow: inset 0 0 20px 10px rgba(0, 0, 0, 0.6);
+}
+.dustPreview {
+  background-color: #555;
+  background-image: url("https://www.transparenttextures.com/patterns/dust.png");
+}
+.grainPreview {
+  background-color: #555;
+  background-image: url("https://www.transparenttextures.com/patterns/noise.png");
+}
+
+/* Save Button */
+.saveButton {
+  width: 100%;
+  background-color: #16a34a;
+  color: white;
+  padding: 12px 0;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: auto; /* Pushes button to the bottom */
+  transition: background-color 0.2s;
+}
+.saveButton:hover {
+  background-color: #15803d;
+}
+
+/* --- Responsive Layout for Mobile --- */
+@media (max-width: 900px) {
+  .editorLayout {
+    flex-direction: column;
+    height: auto;
+    max-height: 95vh;
+  }
+  .previewContainer {
+    flex: 1;
+    min-height: 300px; /* Ensure it has some height */
+  }
+  .controlsContainer {
+    flex-shrink: 0;
+    flex-grow: 0;
+    max-height: 45vh;
+    padding: 0;
+    position: relative;
+  }
+  .controlsContent {
+    overflow-y: auto;
+    padding: 1rem;
+    height: calc(
+      100% - 100px
+    ); /* Adjust height based on tabs and save button */
+  }
+  .controlSection {
+    display: none; /* Hide all sections by default */
+  }
+  .activeSection {
+    display: block; /* Show only the active one */
+  }
+  .mobileTabs {
+    display: flex;
+    justify-content: space-around;
+    background-color: var(--background-dark);
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .mobileTabs button {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0.5rem;
+  }
+  .activeTab {
+    color: var(--accent-color) !important;
+    border-bottom: 2px solid var(--accent-color);
+  }
+  .saveButton {
+    border-radius: 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
 }
