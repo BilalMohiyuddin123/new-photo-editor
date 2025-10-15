@@ -127,31 +127,28 @@ export default function EditPage() {
   // ==========================================================
   // --- ⬇️ FULLY CORRECTED SAVE/SHARE IMAGE FUNCTION ⬇️ ---
   // ==========================================================
+  // ==========================================================
+  // --- ⬇️ UNIVERSAL SAVE IMAGE FUNCTION (Desktop + Mobile) ⬇️ ---
+  // ==========================================================
   const handleSaveImage = async () => {
-    // Check if the image and canvas refs are available
     if (!originalImageRef.current || !canvasRef.current || !imageRef.current)
       return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    // Use the original image for dimensions, but the displayed image for drawing
     const img = originalImageRef.current;
-    const displayedImg = imageRef.current; // The <img> element from the page
+    const displayedImg = imageRef.current;
 
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
 
-    // --- FIX for iOS ---
-    // REMOVED: ctx.filter = getCssFilterString(); (This is buggy in Safari)
-    // CHANGED: We now draw the displayed <img> element. The browser will render
-    // it with all the CSS filters already applied, capturing the final look.
+    // Draw displayed image (with filters already applied)
     ctx.drawImage(displayedImg, 0, 0, canvas.width, canvas.height);
 
-    // --- Draw text (This part remains the same) ---
+    // --- Draw text ---
     const selectedFont =
       fonts.find((f) => f.className === textFont) || fonts[0];
-    // Calculate text size relative to the canvas, not the smaller preview
     const scaledTextSize = textSize * (canvas.width / displayedImg.clientWidth);
     ctx.font = `${scaledTextSize}px ${selectedFont.name}`;
     ctx.fillStyle = textColor;
@@ -159,36 +156,53 @@ export default function EditPage() {
     ctx.textBaseline = "middle";
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
+    // Convert canvas to Blob
     canvas.toBlob(async (blob) => {
       if (!blob) return;
 
       const file = new File([blob], "edited-image.png", { type: "image/png" });
-      const filesArray = [file];
+      const fileURL = URL.createObjectURL(blob);
 
-      if (navigator.canShare && navigator.canShare({ files: filesArray })) {
-        // Use native sharing on mobile (Android, iOS)
-        try {
-          await navigator.share({
-            files: filesArray,
-            title: "My Edited Image",
-            text: "Check out this image I edited!",
-          });
-        } catch (error) {
-          console.error("Sharing failed:", error);
+      // Detect mobile device
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      try {
+        if (isMobile) {
+          // --- Mobile (Android / iOS) ---
+          // 1️⃣ Attempt native share (optional)
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: "My Edited Image",
+              text: "Edited with Photo Editor",
+            });
+            return; // done if shared
+          }
+
+          // 2️⃣ Direct gallery download (works in Safari/Chrome)
+          const link = document.createElement("a");
+          link.href = fileURL;
+          link.download = "edited-image.png";
+          link.style.display = "none";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          // Some mobile browsers open a “Save to Files / Photos” dialog automatically
+        } else {
+          // --- Desktop (Windows, macOS, Linux) ---
+          const link = document.createElement("a");
+          link.download = "edited-image.png";
+          link.href = fileURL;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         }
-      } else {
-        // --- FIX for Desktop ---
-        // This fallback is now more robust.
-        const link = document.createElement("a");
-        link.download = "edited-image.png";
-        link.href = URL.createObjectURL(blob);
-
-        // CHANGED: Add link to the DOM, click it, then remove it
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        URL.revokeObjectURL(link.href);
+      } catch (err) {
+        console.error("Save failed:", err);
+        alert("Sorry, saving the image failed. Try again.");
+      } finally {
+        URL.revokeObjectURL(fileURL);
       }
     }, "image/png");
   };
