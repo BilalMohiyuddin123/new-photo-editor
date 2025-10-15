@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import styles from "./Edit.module.css";
 import Image from "next/image";
 
@@ -116,10 +116,10 @@ export default function EditPage() {
     );
   };
 
-  const saveImage = async () => {
+  const drawEditedImage = () => {
     const canvas = canvasRef.current;
     const img = imageRef.current;
-    if (!img) return;
+    if (!img) return null;
 
     const ctx = canvas.getContext("2d");
     canvas.width = img.naturalWidth;
@@ -128,16 +128,77 @@ export default function EditPage() {
     ctx.filter = applyFilterStyle().filter;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    // Add text
+    // Add overlay effects (visual approximation)
+    activeEffects.forEach((effect) => {
+      if (effect === "vignette") {
+        const gradient = ctx.createRadialGradient(
+          canvas.width / 2,
+          canvas.height / 2,
+          canvas.width / 4,
+          canvas.width / 2,
+          canvas.height / 2,
+          canvas.width / 1.1
+        );
+        gradient.addColorStop(0, "rgba(0,0,0,0)");
+        gradient.addColorStop(1, "rgba(0,0,0,0.8)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    });
+
+    // Add text overlay
     ctx.font = `bold ${Math.floor(canvas.width / 15)}px ${font}`;
     ctx.fillStyle = textColor;
     ctx.textAlign = "center";
     ctx.fillText(text, canvas.width / 2, canvas.height - 80);
 
+    return canvas;
+  };
+
+  // --- Existing download button ---
+  const saveImage = async () => {
+    const canvas = drawEditedImage();
+    if (!canvas) return;
+
     const link = document.createElement("a");
     link.download = "edited-image.jpg";
-    link.href = canvas.toDataURL("image/jpeg", 0.95);
+    link.href = canvas.toDataURL("image/jpeg", 0.9);
     link.click();
+  };
+
+  // --- NEW: Save directly to gallery (mobile compatible) ---
+  const saveToGallery = async () => {
+    const canvas = drawEditedImage();
+    if (!canvas) return;
+
+    canvas.toBlob(
+      (blob) => {
+        const file = new File([blob], "edited-image.jpg", {
+          type: "image/jpeg",
+        });
+        const url = URL.createObjectURL(file);
+
+        // ✅ iPhone Safari & Android Chrome support
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "edited-image.jpg";
+
+        // Try opening in new tab to trigger Save Image on iOS
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+          const newTab = window.open(url, "_blank");
+          setTimeout(() => {
+            newTab.document.title = "Long-press and Save Image";
+          }, 500);
+        } else {
+          a.click();
+        }
+
+        // Clean up
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      },
+      "image/jpeg",
+      0.9
+    );
   };
 
   return (
@@ -151,7 +212,7 @@ export default function EditPage() {
           </label>
         </div>
 
-        {/* Mobile Bottom Navigation */}
+        {/* Mobile Navigation */}
         <div className={styles.mobileNav}>
           {["filters", "effects", "text"].map((tab) => (
             <button
@@ -166,7 +227,7 @@ export default function EditPage() {
           ))}
         </div>
 
-        {/* FILTERS */}
+        {/* Filter Section */}
         {activeTab === "filters" && (
           <div className={styles.section}>
             <h3>Filters</h3>
@@ -208,7 +269,7 @@ export default function EditPage() {
           </div>
         )}
 
-        {/* EFFECTS */}
+        {/* Effects Section */}
         {activeTab === "effects" && (
           <div className={styles.section}>
             <h3>Effects</h3>
@@ -229,7 +290,7 @@ export default function EditPage() {
           </div>
         )}
 
-        {/* TEXT */}
+        {/* Text Section */}
         {activeTab === "text" && (
           <div className={styles.section}>
             <h3>Text Overlay</h3>
@@ -254,6 +315,7 @@ export default function EditPage() {
           </div>
         )}
 
+        {/* --- Existing Button --- */}
         <button
           className={styles.saveBtn}
           onClick={saveImage}
@@ -261,9 +323,18 @@ export default function EditPage() {
         >
           Save Image (JPG)
         </button>
+
+        {/* --- NEW Button --- */}
+        <button
+          className={styles.saveBtnGallery}
+          onClick={saveToGallery}
+          disabled={!image}
+        >
+          📱 Save to Gallery
+        </button>
       </div>
 
-      {/* Preview Section */}
+      {/* Preview */}
       <div className={styles.preview}>
         {image ? (
           <div className={styles.imageContainer}>

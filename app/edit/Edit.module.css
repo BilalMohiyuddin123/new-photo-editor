@@ -194,3 +194,23 @@
     background: #4c51bf;
   }
 }
+.saveBtnGallery {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  background: #2b6cb0;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+  transition: 0.2s;
+}
+
+.saveBtnGallery:hover {
+  background: #3182ce;
+}
+
+.saveBtnGallery:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
