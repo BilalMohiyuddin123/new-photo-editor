@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import { Inter, Lobster, Bebas_Neue, Special_Elite } from "next/font/google";
 import styles from "./Edit.module.css";
@@ -64,19 +64,13 @@ export default function EditPage() {
   // --- STATE MANAGEMENT ---
   const [imageSrc, setImageSrc] = useState(null);
   const [activeTab, setActiveTab] = useState("filters");
-
-  // Editing states
   const [selectedFilter, setSelectedFilter] = useState("none");
   const [filterIntensity, setFilterIntensity] = useState(100);
   const [activeEffects, setActiveEffects] = useState({});
-
-  // Text states
   const [text, setText] = useState("Your Text");
   const [textColor, setTextColor] = useState("#ffffff");
   const [textFont, setTextFont] = useState(fonts[0].className);
   const [textSize, setTextSize] = useState(50);
-
-  // Refs for canvas and image
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
   const originalImageRef = useRef(null);
@@ -102,15 +96,11 @@ export default function EditPage() {
   const getCssFilterString = () => {
     const filter = filters.find((f) => f.id === selectedFilter);
     if (!filter || filter.id === "none") return "none";
-
-    // Interpolate values based on intensity
-    // On 0, it's the default. On 100, it's the filter value. On 150, it's 1.5x the effect.
     const getVal = (defaultValue, filterValue) => {
       if (filterValue === undefined) return defaultValue;
       const difference = filterValue - defaultValue;
       return defaultValue + difference * (filterIntensity / 100);
     };
-
     let filterString = "";
     filterString += `brightness(${getVal(
       100,
@@ -124,7 +114,6 @@ export default function EditPage() {
       0,
       filter.properties["hue-rotate"]
     )}deg)`;
-
     return filterString;
   };
 
@@ -132,29 +121,22 @@ export default function EditPage() {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
   };
 
-  const handleSaveImage = () => {
+  // ==========================================================
+  // --- ⬇️ MODIFIED SAVE/SHARE IMAGE FUNCTION ⬇️ ---
+  // ==========================================================
+  const handleSaveImage = async () => {
     if (!originalImageRef.current || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     const img = originalImageRef.current;
 
-    // Set canvas dimensions to original image
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-
-    // Apply CSS filters to canvas context
     ctx.filter = getCssFilterString();
-
-    // Draw the image
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    // Reset filter for drawing overlays, as they shouldn't be filtered
     ctx.filter = "none";
-
-    // Draw overlays (effects & text)
-    // This part is complex. For simplicity, this example draws text but not CSS background effects.
-    // A more advanced implementation would pre-load effect images and draw them onto the canvas.
     const selectedFont =
       fonts.find((f) => f.className === textFont) || fonts[0];
     const scaledTextSize =
@@ -165,11 +147,34 @@ export default function EditPage() {
     ctx.textBaseline = "middle";
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-    // Trigger download
-    const link = document.createElement("a");
-    link.download = "edited-image.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    // Convert canvas to a Blob object, which is needed for the Web Share API
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+
+      const file = new File([blob], "edited-image.png", { type: "image/png" });
+      const filesArray = [file];
+
+      // **Check if the Web Share API is available and can share files**
+      if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+        try {
+          // **Use the native share dialog on mobile**
+          await navigator.share({
+            files: filesArray,
+            title: "My Edited Image",
+            text: "Check out this image I edited with Midnight Editor!",
+          });
+        } catch (error) {
+          console.error("Sharing failed:", error);
+        }
+      } else {
+        // **Fallback for desktop browsers (or mobile browsers that don't support sharing)**
+        const link = document.createElement("a");
+        link.download = "edited-image.png";
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        URL.revokeObjectURL(link.href); // Clean up the object URL from memory
+      }
+    }, "image/png");
   };
 
   // --- JSX RENDER ---
@@ -187,7 +192,6 @@ export default function EditPage() {
                 className={styles.imagePreview}
                 style={{ filter: getCssFilterString() }}
               />
-              {/* Overlays for Effects */}
               {activeEffects.vignette && (
                 <div className={styles.vignetteOverlay}></div>
               )}
@@ -195,8 +199,6 @@ export default function EditPage() {
               {activeEffects.grain && (
                 <div className={styles.grainOverlay}></div>
               )}
-
-              {/* Text Overlay */}
               <div
                 className={`${styles.textOverlay} ${textFont}`}
                 style={{ color: textColor, fontSize: `${textSize}px` }}
@@ -273,7 +275,9 @@ export default function EditPage() {
                           alt={filter.name}
                           width={80}
                           height={80}
-                          style={{ filter: getCssFilterString() }}
+                          style={{
+                            filter: getCssFilterString(), // This seems complex for a preview, but let's keep it
+                          }}
                           className={
                             selectedFilter === filter.id
                               ? styles.selectedItem
@@ -377,8 +381,9 @@ export default function EditPage() {
                 </div>
               </div>
 
+              {/* --- MODIFIED BUTTON TEXT --- */}
               <button onClick={handleSaveImage} className={styles.saveButton}>
-                Save Image
+                Save or Share Image
               </button>
             </>
           )}
