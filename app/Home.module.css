@@ -1,0 +1,16 @@
+.container {
+  text-align: center;
+  padding: 80px 20px;
+  background: linear-gradient(to bottom right, #111, #333);
+  color: white;
+}
+
+.links a {
+  margin: 10px;
+  color: #00e0ff;
+  font-weight: bold;
+}
+
+.links a:hover {
+  color: #fff;
+}
