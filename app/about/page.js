@@ -10,29 +10,21 @@ export default function AboutPage() {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  /**
-   * Handles the file input change event when a user selects an image.
-   * @param {React.ChangeEvent<HTMLInputElement>} e The event object.
-   */
+  // Handle file upload
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Reset the state for a new image upload
       setBwImage(null);
-
       const reader = new FileReader();
       reader.onload = (event) => {
         setOriginalImage(event.target.result);
-        // Store the file name without its extension for the download
         setImageName(file.name.split(".").slice(0, -1).join("."));
       };
       reader.readAsDataURL(file);
     }
   };
 
-  /**
-   * Converts the uploaded image to black and white using an HTML canvas.
-   */
+  // Convert image to black and white and compress
   const convertToBlackAndWhite = () => {
     if (!originalImage) return;
 
@@ -42,92 +34,70 @@ export default function AboutPage() {
     img.src = originalImage;
 
     img.onload = () => {
-      // Set canvas dimensions to match the image
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
+      // Resize large images to avoid huge downloads
+      const maxDim = 1200;
+      let width = img.width;
+      let height = img.height;
 
-      // Get the image data to manipulate pixels
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (width > height && width > maxDim) {
+        height = (height * maxDim) / width;
+        width = maxDim;
+      } else if (height > maxDim) {
+        width = (width * maxDim) / height;
+        height = maxDim;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const imageData = ctx.getImageData(0, 0, width, height);
       const data = imageData.data;
 
-      // Loop through each pixel and apply a grayscale formula
+      // Convert to grayscale
       for (let i = 0; i < data.length; i += 4) {
-        // Using the luminosity formula for better visual results
-        const average =
-          0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        data[i] = average; // Red
-        data[i + 1] = average; // Green
-        data[i + 2] = average; // Blue
+        const avg = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        data[i] = data[i + 1] = data[i + 2] = avg;
       }
-      // Put the modified data back onto the canvas
+
       ctx.putImageData(imageData, 0, 0);
 
-      // ✨ CHANGE 1: Use JPEG format with 90% quality for smaller file size
-      setBwImage(canvas.toDataURL("image/jpeg", 0.9));
+      // Save as compressed JPEG
+      setBwImage(canvas.toDataURL("image/jpeg", 0.8));
     };
   };
 
-  /**
-   * ✨ CHANGE 2: Updated save handler for better mobile experience.
-   * Triggers the download or opens the native share sheet.
-   */
-  const handleSaveImage = async () => {
+  // Save image — hybrid behavior
+  const handleSaveImage = () => {
     if (!bwImage) return;
 
-    const fileName = `${imageName}-bw.jpg`; // Use .jpg extension
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
 
-    try {
-      // Convert data URL to a blob, then to a file object
-      const response = await fetch(bwImage);
-      const blob = await response.blob();
-      const file = new File([blob], fileName, { type: blob.type });
-
-      // Check if the Web Share API is available (common on mobile)
-      if (navigator.share && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: "Converted Image",
-          text: "Here is your black and white image.",
-        });
-      } else {
-        // Fallback for desktops or browsers that don't support Web Share API
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob); // Use blob URL for more robust downloading
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href); // Clean up the blob URL
-      }
-    } catch (error) {
-      console.error("Error saving or sharing the image:", error);
-      // If sharing fails (e.g., user cancels), provide a fallback download
+    if (isMobile) {
+      // ✅ Mobile behavior: open in new tab for “Save Image”
+      const newTab = window.open();
+      newTab.document.write(`<img src="${bwImage}" style="width:100%">`);
+    } else {
+      // ✅ Desktop behavior: auto-download directly
       const link = document.createElement("a");
       link.href = bwImage;
-      link.download = fileName;
+      link.download = `${imageName}-bw.jpg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
   };
 
-  /**
-   * A handler to trigger the hidden file input when the custom button is clicked.
-   */
-  const handleUploadClick = () => {
-    fileInputRef.current.click();
-  };
+  const handleUploadClick = () => fileInputRef.current.click();
 
   return (
     <div className={styles.container}>
       <h1 className={styles.title}>Black & White Image Converter</h1>
       <p className={styles.description}>
-        Upload an image, convert it to black and white, and save it. Works on
-        desktops, Android, and iOS.
+        Upload an image, convert it to black & white, and save it. Works
+        perfectly on desktop and mobile.
       </p>
 
-      {/* The actual file input is hidden and controlled by a custom button */}
       <input
         type="file"
         accept="image/*"
@@ -136,12 +106,10 @@ export default function AboutPage() {
         className={styles.hiddenInput}
       />
 
-      {/* This button triggers the file selection dialog */}
       <button onClick={handleUploadClick} className={styles.button}>
         Upload Image
       </button>
 
-      {/* A hidden canvas is used for the image processing */}
       <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
 
       <div className={styles.imageContainer}>
@@ -157,6 +125,7 @@ export default function AboutPage() {
             </button>
           </div>
         )}
+
         {bwImage && (
           <div className={styles.imageWrapper}>
             <h2 className={styles.imageTitle}>Black & White</h2>
