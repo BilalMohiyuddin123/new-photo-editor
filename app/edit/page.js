@@ -1,7 +1,7 @@
 // app/edit/page.js
 
 "use client";
-
+import html2canvas from "html2canvas";
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { Inter, Lobster, Bebas_Neue, Special_Elite } from "next/font/google";
@@ -134,57 +134,28 @@ export default function EditPage() {
   };
 
   // --- UPDATED SAVE IMAGE FUNCTION ---
-  const handleSaveImage = () => {
-    if (!originalImageRef.current || !canvasRef.current) return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const img = originalImageRef.current;
+  const handleSaveImage = async () => {
+    if (!imageRef.current) return;
 
-    // Set canvas dimensions to the original image's size
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-
-    // Apply the CSS filters to the canvas context
-    ctx.filter = getCssFilterString();
-
-    // Draw the filtered image onto the canvas
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    // Reset the filter so it doesn't apply to the text or other overlays
-    ctx.filter = "none";
-
-    // NOTE: The CSS overlay effects (vignette, dust, grain) are for preview only.
-    // To save them onto the canvas, you'd need to load them as images/patterns
-    // and draw them explicitly using ctx.drawImage or ctx.fill with patterns.
-    // For this update, they will not be part of the *saved* image unless you
-    // implement drawing them on the canvas.
-
-    // Draw the text overlay
-    const selectedFont =
-      fonts.find((f) => f.className === textFont) || fonts[0];
-    // Scale the text size relative to the original image width for consistency
-    const scaledTextSize =
-      textSize * (canvas.width / imageRef.current.clientWidth);
-    ctx.font = `${scaledTextSize}px "${selectedFont.name}"`; // Use quotes for font names with spaces
-    ctx.fillStyle = textColor;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-    // --- Generate the final image data URL as JPEG ---
-    // Use 'image/jpeg' and a quality factor (0.0 to 1.0)
-    const jpegQuality = 0.9; // 90% quality, adjust as needed for size/quality balance
-    const dataUrl = canvas.toDataURL("image/jpeg", jpegQuality);
-
-    // --- Hybrid Save Logic (Mobile & Desktop) ---
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-    const fileName = `${imageName}-edited.jpeg`; // Ensure consistent JPEG extension
+    const fileName = `${imageName}-edited.jpeg`;
 
     if (isMobile) {
-      // For mobile devices, open a new tab with a friendly UI.
-      const newTab = window.open();
-      newTab.document.write(`
+      // --- MOBILE (iPhone/Android) FIX: Capture visible edited image ---
+      const targetElement = imageRef.current.closest(`.${styles.imageWrapper}`);
+
+      try {
+        const canvas = await html2canvas(targetElement, {
+          useCORS: true,
+          scale: 2, // High-quality output
+          backgroundColor: null,
+        });
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+
+        const newTab = window.open();
+        newTab.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -207,36 +178,61 @@ export default function EditPage() {
             }
             img {
               max-width: 90%;
-              max-height: 70vh; /* Limit height to prevent image from dominating */
-              height: auto;
+              max-height: 70vh;
               border: 2px solid #333;
               border-radius: 8px;
-              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-              object-fit: contain; /* Ensures the entire image is visible without cropping */
+              box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             }
             p {
               margin-top: 20px;
               font-size: 1.1em;
-              line-height: 1.5;
             }
             .image-name {
-                font-weight: bold;
-                color: #ffda47; /* A contrasting color */
+              font-weight: bold;
+              color: #ffda47;
             }
           </style>
         </head>
         <body>
-          <img src="${dataUrl}" alt="Your Edited Image">
+          <img src="${dataUrl}" alt="Edited Image">
           <p>
-            Well done! Your image <span class="image-name">"${imageName}-edited"</span> is ready. <br/>
-            **Long press** the image above to save it to your gallery/photos.
+            Well done! Your image <span class="image-name">"${fileName}"</span> is ready.<br/>
+            <b>Long press</b> the image to save it to your gallery.
           </p>
         </body>
         </html>
       `);
-      newTab.document.close();
+        newTab.document.close();
+      } catch (err) {
+        console.error("Error saving image on mobile:", err);
+        alert("Something went wrong while saving your image.");
+      }
     } else {
-      // For desktop, create a link and trigger a download.
+      // --- DESKTOP LOGIC: Use high-quality canvas rendering ---
+      if (!originalImageRef.current || !canvasRef.current) return;
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      const img = originalImageRef.current;
+
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+
+      ctx.filter = getCssFilterString();
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.filter = "none";
+
+      const selectedFont =
+        fonts.find((f) => f.className === textFont) || fonts[0];
+      const scaledTextSize =
+        textSize * (canvas.width / imageRef.current.clientWidth);
+      ctx.font = `${scaledTextSize}px "${selectedFont.name}"`;
+      ctx.fillStyle = textColor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
       const link = document.createElement("a");
       link.download = fileName;
       link.href = dataUrl;
