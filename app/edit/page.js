@@ -1,9 +1,10 @@
 // app/edit/page.js
 
 "use client";
-import html2canvas from "html2canvas";
+
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import html2canvas from "html2canvas";
 import { Inter, Lobster, Bebas_Neue, Special_Elite } from "next/font/google";
 import styles from "./Edit.module.css";
 
@@ -63,7 +64,7 @@ const effects = [
 export default function EditPage() {
   // --- STATE MANAGEMENT ---
   const [imageSrc, setImageSrc] = useState(null);
-  const [imageName, setImageName] = useState(""); // State for the image file name
+  const [imageName, setImageName] = useState("");
   const [activeTab, setActiveTab] = useState("filters");
 
   // Editing states
@@ -77,23 +78,32 @@ export default function EditPage() {
   const [textFont, setTextFont] = useState(fonts[0].className);
   const [textSize, setTextSize] = useState(50);
 
-  // Refs for canvas and image
-  const imageRef = useRef(null);
-  const canvasRef = useRef(null);
-  const originalImageRef = useRef(null);
+  // Refs
+  const imageRef = useRef(null); // the <img> preview element
+  const wrapperRef = useRef(null); // the preview wrapper we will screenshot
+  const canvasRef = useRef(null); // fallback canvas
+  const originalImageRef = useRef(null); // HTMLImageElement for fallback drawing
   const uploadInputRef = useRef(null);
 
-  // --- IMAGE & FILTER LOGIC ---
+  // --- IMAGE UPLOAD ---
   const handleImageUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
-      // Set the image name for saving later
       setImageName(file.name.split(".").slice(0, -1).join("."));
       const reader = new FileReader();
       reader.onload = (event) => {
-        setImageSrc(event.target.result);
+        const dataUrl = event.target.result;
+        setImageSrc(dataUrl);
+
+        // Create an HTMLImageElement reference for fallback canvas rendering
         const img = new window.Image();
-        img.src = event.target.result;
+        // try setting crossOrigin to reduce CORS problems with html2canvas (works with remote images)
+        try {
+          img.crossOrigin = "anonymous";
+        } catch (err) {
+          // ignore
+        }
+        img.src = dataUrl;
         img.onload = () => {
           originalImageRef.current = img;
         };
@@ -102,6 +112,7 @@ export default function EditPage() {
     }
   };
 
+  // --- CSS filter string generator (same as before) ---
   const getCssFilterString = () => {
     const filter = filters.find((f) => f.id === selectedFilter);
     if (!filter || filter.id === "none") return "none";
@@ -133,112 +144,121 @@ export default function EditPage() {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
   };
 
-  // --- UPDATED SAVE IMAGE FUNCTION ---
+  // --- CAPTURE FUNCTION: returns a JPEG data URL of the edited preview ---
+  const captureEditedImage = async () => {
+    // Prefer capturing the visible preview (with html2canvas) so mobile browsers
+    // that don't respect ctx.filter will still get the exact visual.
+    if (!wrapperRef.current) throw new Error("No preview element to capture.");
 
-  const handleSaveImage = async () => {
-    if (!imageRef.current) return;
-
-    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-    const fileName = `${imageName}-edited.jpeg`;
-
-    if (isMobile) {
-      // --- MOBILE (iPhone/Android) FIX: Capture visible edited image ---
-      const targetElement = imageRef.current.closest(`.${styles.imageWrapper}`);
-
-      try {
-        const canvas = await html2canvas(targetElement, {
-          useCORS: true,
-          scale: 2, // High-quality output
-          backgroundColor: null,
-        });
-
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-
-        const newTab = window.open();
-        newTab.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Save Your Image</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body {
-              margin: 0;
-              padding: 20px;
-              background-color: #1a1a1a;
-              color: #f0f0f0;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              min-height: 100vh;
-              text-align: center;
-              box-sizing: border-box;
-            }
-            img {
-              max-width: 90%;
-              max-height: 70vh;
-              border: 2px solid #333;
-              border-radius: 8px;
-              box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            }
-            p {
-              margin-top: 20px;
-              font-size: 1.1em;
-            }
-            .image-name {
-              font-weight: bold;
-              color: #ffda47;
-            }
-          </style>
-        </head>
-        <body>
-          <img src="${dataUrl}" alt="Edited Image">
-          <p>
-            Well done! Your image <span class="image-name">"${fileName}"</span> is ready.<br/>
-            <b>Long press</b> the image to save it to your gallery.
-          </p>
-        </body>
-        </html>
-      `);
-        newTab.document.close();
-      } catch (err) {
-        console.error("Error saving image on mobile:", err);
-        alert("Something went wrong while saving your image.");
-      }
-    } else {
-      // --- DESKTOP LOGIC: Use high-quality canvas rendering ---
-      if (!originalImageRef.current || !canvasRef.current) return;
-
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      const img = originalImageRef.current;
-
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-
-      ctx.filter = getCssFilterString();
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      ctx.filter = "none";
-
-      const selectedFont =
-        fonts.find((f) => f.className === textFont) || fonts[0];
-      const scaledTextSize =
-        textSize * (canvas.width / imageRef.current.clientWidth);
-      ctx.font = `${scaledTextSize}px "${selectedFont.name}"`;
-      ctx.fillStyle = textColor;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
+    // Try html2canvas first
+    try {
+      const canvas = await html2canvas(wrapperRef.current, {
+        useCORS: true,
+        allowTaint: false,
+        scale: 2, // increase scale for higher quality
+        backgroundColor: null,
+      });
       const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-      const link = document.createElement("a");
-      link.download = fileName;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      return dataUrl;
+    } catch (err) {
+      console.warn("html2canvas failed, falling back to canvas drawing:", err);
+      // fallback - draw original image into offscreen canvas and apply filters & text (your original logic)
+    }
+
+    // Fallback: draw using canvas API (works well for desktop)
+    if (!originalImageRef.current || !canvasRef.current) {
+      throw new Error("No image available to draw in fallback.");
+    }
+
+    const img = originalImageRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    // Set canvas to original image size
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+
+    // Apply filters using ctx.filter (same filter generator used for preview)
+    ctx.filter = getCssFilterString();
+
+    // Draw image at full resolution
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    // Reset filter, draw text
+    ctx.filter = "none";
+    const selectedFont =
+      fonts.find((f) => f.className === textFont) || fonts[0];
+
+    // Compute scaled text size relative to preview width (fall back if imageRef not present)
+    const previewWidth = imageRef.current?.clientWidth || canvas.width;
+    const scaledTextSize = Math.max(
+      12,
+      Math.round(textSize * (canvas.width / previewWidth))
+    );
+    ctx.font = `${scaledTextSize}px "${selectedFont.name}"`;
+    ctx.fillStyle = textColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    // You can add drawing of vignette/grain/dust here if you want them baked in.
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    return dataUrl;
+  };
+
+  // --- SAVE FUNCTION: uses captureEditedImage() then opens new tab (mobile) or downloads (desktop) ---
+  const saveImageFromCapture = async () => {
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    const fileName = `${imageName || "edited-image"}-edited.jpeg`;
+
+    try {
+      const dataUrl = await captureEditedImage();
+
+      if (isMobile) {
+        // Open in new tab so user can long-press to save on phones
+        const newTab = window.open();
+        if (!newTab) {
+          // Popup blocked
+          alert("Please allow popups for this site to save the image.");
+          return;
+        }
+        newTab.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Save Image</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              html,body { height:100%; margin:0; background:#111; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+              .wrap { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; box-sizing:border-box; }
+              img { max-width:95%; height:auto; border-radius:8px; box-shadow:0 6px 30px rgba(0,0,0,0.6); }
+              p { margin-top:18px; text-align:center; color:#eee; }
+              .name { color:#ffd54f; font-weight:600; }
+            </style>
+          </head>
+          <body>
+            <div class="wrap">
+              <img src="${dataUrl}" alt="Edited Image" />
+              <p>Long press the image and choose "Save Image" to save to your gallery.<br/><span class="name">${fileName}</span></p>
+            </div>
+          </body>
+          </html>
+        `);
+        newTab.document.close();
+      } else {
+        // Desktop: trigger download
+        const link = document.createElement("a");
+        link.download = fileName;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.error("Error saving image:", err);
+      alert("Something went wrong while saving your image. Please try again.");
     }
   };
 
@@ -249,13 +269,15 @@ export default function EditPage() {
         {/* --- IMAGE PREVIEW --- */}
         <div className={styles.previewContainer}>
           {imageSrc ? (
-            <div className={styles.imageWrapper}>
+            <div className={styles.imageWrapper} ref={wrapperRef}>
               <img
                 ref={imageRef}
                 src={imageSrc}
                 alt="Image preview"
                 className={styles.imagePreview}
                 style={{ filter: getCssFilterString() }}
+                // try to help html2canvas with crossOrigin when possible
+                crossOrigin="anonymous"
               />
               {/* Overlays for Effects */}
               {activeEffects.vignette && (
@@ -295,13 +317,12 @@ export default function EditPage() {
           onChange={handleImageUpload}
           style={{ display: "none" }}
         />
-        <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
+        <canvas ref={canvasRef} style={{ display: "none" }} />
 
         {/* --- CONTROLS PANEL --- */}
         <div className={styles.controlsContainer}>
           {imageSrc && (
             <>
-              {/* Mobile Tab Navigation */}
               <div className={styles.mobileTabs}>
                 <button
                   onClick={() => setActiveTab("filters")}
@@ -324,7 +345,6 @@ export default function EditPage() {
               </div>
 
               <div className={styles.controlsContent}>
-                {/* Filters Section */}
                 <div
                   className={`${styles.controlSection} ${
                     activeTab === "filters" ? styles.activeSection : ""
@@ -343,9 +363,7 @@ export default function EditPage() {
                           alt={filter.name}
                           width={80}
                           height={80}
-                          style={{
-                            filter: getCssFilterString(),
-                          }}
+                          style={{ filter: getCssFilterString() }}
                           className={
                             selectedFilter === filter.id
                               ? styles.selectedItem
@@ -371,7 +389,6 @@ export default function EditPage() {
                   )}
                 </div>
 
-                {/* Effects Section */}
                 <div
                   className={`${styles.controlSection} ${
                     activeTab === "effects" ? styles.activeSection : ""
@@ -398,7 +415,6 @@ export default function EditPage() {
                   </div>
                 </div>
 
-                {/* Text Section */}
                 <div
                   className={`${styles.controlSection} ${
                     activeTab === "text" ? styles.activeSection : ""
@@ -449,7 +465,10 @@ export default function EditPage() {
                 </div>
               </div>
 
-              <button onClick={handleSaveImage} className={styles.saveButton}>
+              <button
+                onClick={saveImageFromCapture}
+                className={styles.saveButton}
+              >
                 Save Image
               </button>
             </>
