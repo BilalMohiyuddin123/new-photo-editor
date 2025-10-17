@@ -1,7 +1,9 @@
+// app/edit/page.js
+
 "use client";
 
-import { useState, useRef } from "react";
-import NextImage from "next/image"; // ✅ renamed to avoid conflict
+import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { Inter, Lobster, Bebas_Neue, Special_Elite } from "next/font/google";
 import styles from "./Edit.module.css";
 
@@ -61,39 +63,45 @@ const effects = [
 export default function EditPage() {
   // --- STATE MANAGEMENT ---
   const [imageSrc, setImageSrc] = useState(null);
-  const [imageName, setImageName] = useState("");
+  const [imageName, setImageName] = useState(""); // State for the image file name
   const [activeTab, setActiveTab] = useState("filters");
+
+  // Editing states
   const [selectedFilter, setSelectedFilter] = useState("none");
   const [filterIntensity, setFilterIntensity] = useState(100);
   const [activeEffects, setActiveEffects] = useState({});
+
+  // Text states
   const [text, setText] = useState("Your Text");
   const [textColor, setTextColor] = useState("#ffffff");
   const [textFont, setTextFont] = useState(fonts[0].className);
   const [textSize, setTextSize] = useState(50);
 
+  // Refs for canvas and image
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
   const originalImageRef = useRef(null);
   const uploadInputRef = useRef(null);
 
-  // --- IMAGE UPLOAD ---
+  // --- IMAGE & FILTER LOGIC ---
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Set the image name for saving later
       setImageName(file.name.split(".").slice(0, -1).join("."));
-      const url = URL.createObjectURL(file);
-      setImageSrc(url);
-
-      const img = new window.Image();
-      img.crossOrigin = "anonymous";
-      img.src = url;
-      img.onload = () => {
-        originalImageRef.current = img;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImageSrc(event.target.result);
+        const img = new window.Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          originalImageRef.current = img;
+        };
       };
+      reader.readAsDataURL(file);
     }
   };
 
-  // --- CSS FILTER GENERATOR ---
   const getCssFilterString = () => {
     const filter = filters.find((f) => f.id === selectedFilter);
     if (!filter || filter.id === "none") return "none";
@@ -104,21 +112,28 @@ export default function EditPage() {
       return defaultValue + difference * (filterIntensity / 100);
     };
 
-    return `
-      brightness(${getVal(100, filter.properties.brightness)}%)
-      contrast(${getVal(100, filter.properties.contrast)}%)
-      saturate(${getVal(100, filter.properties.saturate)}%)
-      grayscale(${getVal(0, filter.properties.grayscale)}%)
-      sepia(${getVal(0, filter.properties.sepia)}%)
-      hue-rotate(${getVal(0, filter.properties["hue-rotate"])}deg)
-    `;
+    let filterString = "";
+    filterString += `brightness(${getVal(
+      100,
+      filter.properties.brightness
+    )}%) `;
+    filterString += `contrast(${getVal(100, filter.properties.contrast)}%) `;
+    filterString += `saturate(${getVal(100, filter.properties.saturate)}%) `;
+    filterString += `grayscale(${getVal(0, filter.properties.grayscale)}%) `;
+    filterString += `sepia(${getVal(0, filter.properties.sepia)}%) `;
+    filterString += `hue-rotate(${getVal(
+      0,
+      filter.properties["hue-rotate"]
+    )}deg)`;
+
+    return filterString;
   };
 
   const toggleEffect = (effectId) => {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
   };
 
-  // --- SAVE IMAGE (FULL FRONTEND + SAFARI COMPATIBLE) ---
+  // --- UPDATED SAVE IMAGE FUNCTION ---
   const handleSaveImage = () => {
     if (!originalImageRef.current || !canvasRef.current) return;
 
@@ -126,82 +141,108 @@ export default function EditPage() {
     const ctx = canvas.getContext("2d");
     const img = originalImageRef.current;
 
+    // Set canvas dimensions to the original image's size
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
 
+    // Apply the CSS filters to the canvas context
     ctx.filter = getCssFilterString();
+
+    // Draw the filtered image onto the canvas
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    // Reset the filter so it doesn't apply to the text or other overlays
     ctx.filter = "none";
 
-    // Draw Text
+    // NOTE: The CSS overlay effects (vignette, dust, grain) are for preview only.
+    // To save them onto the canvas, you'd need to load them as images/patterns
+    // and draw them explicitly using ctx.drawImage or ctx.fill with patterns.
+    // For this update, they will not be part of the *saved* image unless you
+    // implement drawing them on the canvas.
+
+    // Draw the text overlay
     const selectedFont =
       fonts.find((f) => f.className === textFont) || fonts[0];
+    // Scale the text size relative to the original image width for consistency
     const scaledTextSize =
       textSize * (canvas.width / imageRef.current.clientWidth);
-    ctx.font = `${scaledTextSize}px "${selectedFont.name}"`;
+    ctx.font = `${scaledTextSize}px "${selectedFont.name}"`; // Use quotes for font names with spaces
     ctx.fillStyle = textColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-    const jpegQuality = 0.9;
+    // --- Generate the final image data URL as JPEG ---
+    // Use 'image/jpeg' and a quality factor (0.0 to 1.0)
+    const jpegQuality = 0.9; // 90% quality, adjust as needed for size/quality balance
     const dataUrl = canvas.toDataURL("image/jpeg", jpegQuality);
-    const fileName = `${imageName}-edited.jpeg`;
+
+    // --- Hybrid Save Logic (Mobile & Desktop) ---
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    const fileName = `${imageName}-edited.jpeg`; // Ensure consistent JPEG extension
 
     if (isMobile) {
+      // For mobile devices, open a new tab with a friendly UI.
       const newTab = window.open();
       newTab.document.write(`
         <!DOCTYPE html>
         <html>
-          <head>
-            <title>Save Your Image</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body {
-                margin: 0;
-                padding: 20px;
-                background-color: #1a1a1a;
-                color: #f0f0f0;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                text-align: center;
-              }
-              img {
-                max-width: 90%;
-                max-height: 70vh;
-                height: auto;
-                border: 2px solid #333;
-                border-radius: 8px;
-                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-                object-fit: contain;
-              }
-              p {
-                margin-top: 20px;
-                font-size: 1.1em;
-              }
-              .image-name {
+        <head>
+          <title>Save Your Image</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              margin: 0;
+              padding: 20px;
+              background-color: #1a1a1a;
+              color: #f0f0f0;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              text-align: center;
+              box-sizing: border-box;
+            }
+            img {
+              max-width: 90%;
+              max-height: 70vh; /* Limit height to prevent image from dominating */
+              height: auto;
+              border: 2px solid #333;
+              border-radius: 8px;
+              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+              object-fit: contain; /* Ensures the entire image is visible without cropping */
+            }
+            p {
+              margin-top: 20px;
+              font-size: 1.1em;
+              line-height: 1.5;
+            }
+            .image-name {
                 font-weight: bold;
-                color: #ffda47;
-              }
-            </style>
-          </head>
-          <body>
-            <img src="${dataUrl}" alt="Your Edited Image" />
-            <p>Well done! Your image <span class="image-name">"${imageName}-edited"</span> is ready.<br/>Long press the image to save it.</p>
-          </body>
+                color: #ffda47; /* A contrasting color */
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" alt="Your Edited Image">
+          <p>
+            Well done! Your image <span class="image-name">"${imageName}-edited"</span> is ready. <br/>
+            **Long press** the image above to save it to your gallery/photos.
+          </p>
+        </body>
         </html>
       `);
       newTab.document.close();
     } else {
+      // For desktop, create a link and trigger a download.
       const link = document.createElement("a");
       link.download = fileName;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -220,7 +261,7 @@ export default function EditPage() {
                 className={styles.imagePreview}
                 style={{ filter: getCssFilterString() }}
               />
-
+              {/* Overlays for Effects */}
               {activeEffects.vignette && (
                 <div className={styles.vignetteOverlay}></div>
               )}
@@ -229,6 +270,7 @@ export default function EditPage() {
                 <div className={styles.grainOverlay}></div>
               )}
 
+              {/* Text Overlay */}
               <div
                 className={`${styles.textOverlay} ${textFont}`}
                 style={{ color: textColor, fontSize: `${textSize}px` }}
@@ -263,6 +305,7 @@ export default function EditPage() {
         <div className={styles.controlsContainer}>
           {imageSrc && (
             <>
+              {/* Mobile Tab Navigation */}
               <div className={styles.mobileTabs}>
                 <button
                   onClick={() => setActiveTab("filters")}
@@ -285,7 +328,7 @@ export default function EditPage() {
               </div>
 
               <div className={styles.controlsContent}>
-                {/* Filters */}
+                {/* Filters Section */}
                 <div
                   className={`${styles.controlSection} ${
                     activeTab === "filters" ? styles.activeSection : ""
@@ -299,12 +342,14 @@ export default function EditPage() {
                         className={styles.filterItem}
                         onClick={() => setSelectedFilter(filter.id)}
                       >
-                        <NextImage
+                        <Image
                           src={imageSrc}
                           alt={filter.name}
                           width={80}
                           height={80}
-                          style={{ filter: getCssFilterString() }}
+                          style={{
+                            filter: getCssFilterString(),
+                          }}
                           className={
                             selectedFilter === filter.id
                               ? styles.selectedItem
@@ -330,7 +375,7 @@ export default function EditPage() {
                   )}
                 </div>
 
-                {/* Effects */}
+                {/* Effects Section */}
                 <div
                   className={`${styles.controlSection} ${
                     activeTab === "effects" ? styles.activeSection : ""
@@ -357,7 +402,7 @@ export default function EditPage() {
                   </div>
                 </div>
 
-                {/* Text */}
+                {/* Text Section */}
                 <div
                   className={`${styles.controlSection} ${
                     activeTab === "text" ? styles.activeSection : ""
