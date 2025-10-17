@@ -133,7 +133,7 @@ export default function EditPage() {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
   };
 
-  // --- ✅ UPDATED SAVE IMAGE FUNCTION ---
+  // --- UPDATED SAVE IMAGE FUNCTION ---
   const handleSaveImage = () => {
     if (!originalImageRef.current || !canvasRef.current) return;
 
@@ -154,8 +154,11 @@ export default function EditPage() {
     // Reset the filter so it doesn't apply to the text or other overlays
     ctx.filter = "none";
 
-    // NOTE: The CSS overlay effects (vignette, dust) are for preview only.
-    // To save them, you'd need to load them as images and draw them onto the canvas.
+    // NOTE: The CSS overlay effects (vignette, dust, grain) are for preview only.
+    // To save them onto the canvas, you'd need to load them as images/patterns
+    // and draw them explicitly using ctx.drawImage or ctx.fill with patterns.
+    // For this update, they will not be part of the *saved* image unless you
+    // implement drawing them on the canvas.
 
     // Draw the text overlay
     const selectedFont =
@@ -169,21 +172,73 @@ export default function EditPage() {
     ctx.textBaseline = "middle";
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-    // --- Generate the final image data URL ---
-    const dataUrl = canvas.toDataURL("image/png");
+    // --- Generate the final image data URL as JPEG ---
+    // Use 'image/jpeg' and a quality factor (0.0 to 1.0)
+    const jpegQuality = 0.9; // 90% quality, adjust as needed for size/quality balance
+    const dataUrl = canvas.toDataURL("image/jpeg", jpegQuality);
 
     // --- Hybrid Save Logic (Mobile & Desktop) ---
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    const fileName = `${imageName}-edited.jpeg`; // Ensure consistent JPEG extension
 
     if (isMobile) {
-      // For mobile devices, open the image in a new tab.
-      // The user can then long-press to save it.
+      // For mobile devices, open a new tab with a friendly UI.
       const newTab = window.open();
-      newTab.document.write(`<img src="${dataUrl}" style="width:100%;">`);
+      newTab.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Save Your Image</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              margin: 0;
+              padding: 20px;
+              background-color: #1a1a1a;
+              color: #f0f0f0;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              text-align: center;
+              box-sizing: border-box;
+            }
+            img {
+              max-width: 90%;
+              max-height: 70vh; /* Limit height to prevent image from dominating */
+              height: auto;
+              border: 2px solid #333;
+              border-radius: 8px;
+              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+              object-fit: contain; /* Ensures the entire image is visible without cropping */
+            }
+            p {
+              margin-top: 20px;
+              font-size: 1.1em;
+              line-height: 1.5;
+            }
+            .image-name {
+                font-weight: bold;
+                color: #ffda47; /* A contrasting color */
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" alt="Your Edited Image">
+          <p>
+            Well done! Your image <span class="image-name">"${imageName}-edited"</span> is ready. <br/>
+            **Long press** the image above to save it to your gallery/photos.
+          </p>
+        </body>
+        </html>
+      `);
+      newTab.document.close();
     } else {
       // For desktop, create a link and trigger a download.
       const link = document.createElement("a");
-      link.download = `${imageName}-edited.png`;
+      link.download = fileName;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
@@ -287,16 +342,13 @@ export default function EditPage() {
                         className={styles.filterItem}
                         onClick={() => setSelectedFilter(filter.id)}
                       >
-                        {/* The small filter previews now correctly reflect the main image's filter choice. 
-                            To show each unique filter, we would apply that specific filter's string here.
-                            This is a UX choice and the current code is kept for simplicity. */}
                         <Image
                           src={imageSrc}
                           alt={filter.name}
                           width={80}
                           height={80}
                           style={{
-                            filter: getCssFilterString(), // This preview will show the currently selected filter
+                            filter: getCssFilterString(),
                           }}
                           className={
                             selectedFilter === filter.id
