@@ -441,7 +441,7 @@ export default function EditPage() {
   useEffect(() => {
     const script = document.createElement("script");
     script.src =
-      "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+      "https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js";
     script.async = true;
     document.body.appendChild(script);
     return () => {
@@ -483,18 +483,15 @@ export default function EditPage() {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
 
   const handleSaveImage = async () => {
-    if (typeof html2canvas === "undefined" || !imageWrapperRef.current) {
+    if (typeof domtoimage === "undefined" || !imageWrapperRef.current) {
       alert("Editor is not ready, please wait a moment and try again.");
       return;
     }
     setIsSaving(true);
     try {
-      const canvas = await html2canvas(imageWrapperRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        scale: 2,
+      const dataUrl = await domtoimage.toJpeg(imageWrapperRef.current, {
+        quality: 0.95,
       });
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
       const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
       const fileName = `${imageName || "edited"}-image.jpeg`;
       if (isMobile) {
