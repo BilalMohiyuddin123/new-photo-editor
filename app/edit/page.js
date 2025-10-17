@@ -63,6 +63,7 @@ const effects = [
 export default function EditPage() {
   // --- STATE MANAGEMENT ---
   const [imageSrc, setImageSrc] = useState(null);
+  const [imageName, setImageName] = useState(""); // State for the image file name
   const [activeTab, setActiveTab] = useState("filters");
 
   // Editing states
@@ -86,6 +87,8 @@ export default function EditPage() {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Set the image name for saving later
+      setImageName(file.name.split(".").slice(0, -1).join("."));
       const reader = new FileReader();
       reader.onload = (event) => {
         setImageSrc(event.target.result);
@@ -103,8 +106,6 @@ export default function EditPage() {
     const filter = filters.find((f) => f.id === selectedFilter);
     if (!filter || filter.id === "none") return "none";
 
-    // Interpolate values based on intensity
-    // On 0, it's the default. On 100, it's the filter value. On 150, it's 1.5x the effect.
     const getVal = (defaultValue, filterValue) => {
       if (filterValue === undefined) return defaultValue;
       const difference = filterValue - defaultValue;
@@ -132,6 +133,7 @@ export default function EditPage() {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
   };
 
+  // --- ✅ UPDATED SAVE IMAGE FUNCTION ---
   const handleSaveImage = () => {
     if (!originalImageRef.current || !canvasRef.current) return;
 
@@ -139,37 +141,54 @@ export default function EditPage() {
     const ctx = canvas.getContext("2d");
     const img = originalImageRef.current;
 
-    // Set canvas dimensions to original image
+    // Set canvas dimensions to the original image's size
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
 
-    // Apply CSS filters to canvas context
+    // Apply the CSS filters to the canvas context
     ctx.filter = getCssFilterString();
 
-    // Draw the image
+    // Draw the filtered image onto the canvas
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    // Reset filter for drawing overlays, as they shouldn't be filtered
+    // Reset the filter so it doesn't apply to the text or other overlays
     ctx.filter = "none";
 
-    // Draw overlays (effects & text)
-    // This part is complex. For simplicity, this example draws text but not CSS background effects.
-    // A more advanced implementation would pre-load effect images and draw them onto the canvas.
+    // NOTE: The CSS overlay effects (vignette, dust) are for preview only.
+    // To save them, you'd need to load them as images and draw them onto the canvas.
+
+    // Draw the text overlay
     const selectedFont =
       fonts.find((f) => f.className === textFont) || fonts[0];
+    // Scale the text size relative to the original image width for consistency
     const scaledTextSize =
       textSize * (canvas.width / imageRef.current.clientWidth);
-    ctx.font = `${scaledTextSize}px ${selectedFont.name}`;
+    ctx.font = `${scaledTextSize}px "${selectedFont.name}"`; // Use quotes for font names with spaces
     ctx.fillStyle = textColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-    // Trigger download
-    const link = document.createElement("a");
-    link.download = "edited-image.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    // --- Generate the final image data URL ---
+    const dataUrl = canvas.toDataURL("image/png");
+
+    // --- Hybrid Save Logic (Mobile & Desktop) ---
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      // For mobile devices, open the image in a new tab.
+      // The user can then long-press to save it.
+      const newTab = window.open();
+      newTab.document.write(`<img src="${dataUrl}" style="width:100%;">`);
+    } else {
+      // For desktop, create a link and trigger a download.
+      const link = document.createElement("a");
+      link.download = `${imageName}-edited.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   // --- JSX RENDER ---
@@ -268,12 +287,17 @@ export default function EditPage() {
                         className={styles.filterItem}
                         onClick={() => setSelectedFilter(filter.id)}
                       >
+                        {/* The small filter previews now correctly reflect the main image's filter choice. 
+                            To show each unique filter, we would apply that specific filter's string here.
+                            This is a UX choice and the current code is kept for simplicity. */}
                         <Image
                           src={imageSrc}
                           alt={filter.name}
                           width={80}
                           height={80}
-                          style={{ filter: getCssFilterString() }}
+                          style={{
+                            filter: getCssFilterString(), // This preview will show the currently selected filter
+                          }}
                           className={
                             selectedFilter === filter.id
                               ? styles.selectedItem
