@@ -188,7 +188,7 @@ const InjectStyles = () => {
         transition: all 0.2s;
       }
       .mobileTabs .activeTab {
-        background-color: #007aff;
+        backgroundColor: #007aff;
         color: white;
         border-color: #007aff;
       }
@@ -440,8 +440,9 @@ export default function EditPage() {
 
   useEffect(() => {
     const script = document.createElement("script");
+    // Switch to the more reliable html-to-image library
     script.src =
-      "https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js";
+      "https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js";
     script.async = true;
     document.body.appendChild(script);
     return () => {
@@ -483,14 +484,17 @@ export default function EditPage() {
     setActiveEffects((prev) => ({ ...prev, [effectId]: !prev[effectId] }));
 
   const handleSaveImage = async () => {
-    if (typeof domtoimage === "undefined" || !imageWrapperRef.current) {
+    // Check for the new library object 'htmlToImage'
+    if (typeof htmlToImage === "undefined" || !imageWrapperRef.current) {
       alert("Editor is not ready, please wait a moment and try again.");
       return;
     }
     setIsSaving(true);
     try {
-      const dataUrl = await domtoimage.toJpeg(imageWrapperRef.current, {
+      // Use the new library's toJpeg method with options for better mobile rendering
+      const dataUrl = await htmlToImage.toJpeg(imageWrapperRef.current, {
         quality: 0.95,
+        pixelRatio: 2, // Render at higher resolution for crisp images on mobile
       });
       const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
       const fileName = `${imageName || "edited"}-image.jpeg`;
